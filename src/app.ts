@@ -2,10 +2,15 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { corsOptions } from "./config/cors";
+import { bootstrapApp } from "./lib/bootstrap";
 import routes from "./routes";
 import { errorHandler } from "./middlewares/errorHandler";
 
 export const app = express();
+
+app.use((_req, _res, next) => {
+  void bootstrapApp().then(() => next()).catch(next);
+});
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
@@ -19,3 +24,5 @@ app.get("/", (_req, res) => {
 
 app.use("/api", routes);
 app.use(errorHandler);
+
+export default app;
