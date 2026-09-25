@@ -1,4 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
+import { isValidObjectId } from "mongoose";
+import Company from "../models/Company";
+import Contact from "../models/Contact";
 import FinanceEntry, { type IFinanceEntry } from "../models/FinanceEntry";
 import MonthlyGoal from "../models/MonthlyGoal";
 import RecurringExpense from "../models/RecurringExpense";
@@ -45,15 +48,48 @@ async function materializeRecurring(scope: Record<string, unknown>, month: strin
   }
 }
 
+type EntryBody = Partial<IFinanceEntry> & { recurring?: boolean };
+
+/** Vínculos com negociação/contato/empresa: id válido ou vazio (remove o vínculo). */
+function linkUpdates(body: Record<string, unknown>) {
+  const set: Record<string, unknown> = {};
+  const unset: string[] = [];
+  for (const key of ["leadId", "contactId", "companyId"]) {
+    if (body[key] === undefined) continue;
+    if (typeof body[key] === "string" && isValidObjectId(body[key])) set[key] = body[key];
+    else unset.push(key);
+    delete body[key];
+  }
+  return { set, unset };
+}
+
+/** Sem cliente digitado, usa o nome do contato ou da empresa vinculados. */
+async function fillClientName(entry: IFinanceEntry) {
+  if (entry.type !== "income" || entry.client) return;
+  const company = entry.companyId ? await Company.findById(entry.companyId).select("name").lean() : null;
+  const contact = !company && entry.contactId ? await Contact.findById(entry.contactId).select("name").lean() : null;
+  entry.client = company?.name || contact?.name || "";
+}
+
 function goalOwner(req: Request) {
   const scoped = ownerScope(req).ownerId;
   return scoped || req.user!._id;
 }
 
+/** GET /finance/entries?month=YYYY-MM ou ?year=YYYY (planilha do ano). */
 export async function listEntries(req: Request, res: Response, next: NextFunction) {
   try {
-    const month = monthParam(req.query.month);
     const scope = ownerScope(req);
+    if (typeof req.query.year === "string" && /^\d{4}$/.test(req.query.year)) {
+      const year = req.query.year;
+      for (let m = 1; m <= 12; m += 1) await materializeRecurring(scope, `${year}-${String(m).padStart(2, "0")}`);
+      const entries = await FinanceEntry.find({ ...scope, date: { $regex: `^${year}-` } })
+        .sort({ date: 1, createdAt: 1 })
+        .lean();
+      res.json({ data: await withOwnerNames(entries), meta: { year } });
+      return;
+    }
+    const month = monthParam(req.query.month);
     await materializeRecurring(scope, month);
     const entries = await FinanceEntry.find({ ...scope, date: { $regex: `^${month}-` } })
       .sort({ date: -1, createdAt: -1 })
@@ -67,8 +103,10 @@ export async function listEntries(req: Request, res: Response, next: NextFunctio
 
 export async function createEntry(req: Request, res: Response, next: NextFunction) {
   try {
-    const { recurring, ...body } = stripOwner(req.body) as Partial<IFinanceEntry> & { recurring?: boolean };
-    const entry = new FinanceEntry({ ...body, ownerId: req.user!._id });
+    const { recurring, ...body } = stripOwner(req.body) as EntryBody;
+    const links = linkUpdates(body as Record<string, unknown>);
+    const entry = new FinanceEntry({ ...body, ...links.set, ownerId: req.user!._id });
+    await fillClientName(entry);
     await entry.validate();
     if (recurring && entry.type === "expense") {
       const series = await RecurringExpense.create({
@@ -96,9 +134,12 @@ export async function updateEntry(req: Request, res: Response, next: NextFunctio
       res.status(404).json({ error: "Movimentação não encontrada." });
       return;
     }
-    const { recurring, ...body } = stripOwner(req.body) as Partial<IFinanceEntry> & { recurring?: boolean };
+    const { recurring, ...body } = stripOwner(req.body) as EntryBody;
     delete body.recurringId;
-    entry.set(body);
+    const links = linkUpdates(body as Record<string, unknown>);
+    entry.set({ ...body, ...links.set });
+    links.unset.forEach((key) => entry.set(key, undefined));
+    await fillClientName(entry);
 
     if (recurring === false && entry.recurringId) {
       await RecurringExpense.updateOne({ _id: entry.recurringId }, { active: false });

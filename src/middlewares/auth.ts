@@ -1,7 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
+import { hasModule } from "../lib/permissions";
 import User from "../models/User";
+import type { ModuleKey } from "../types";
 
 interface AuthTokenPayload {
   userId: string;
@@ -44,4 +46,19 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
 
   next();
+}
+
+/** Libera a rota se o usuário tiver acesso a pelo menos um dos módulos. */
+export function requireModule(...modules: ModuleKey[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      res.status(401).json({ error: "Não autorizado" });
+      return;
+    }
+    if (!hasModule(req.user, ...modules)) {
+      res.status(403).json({ error: "Seu usuário não tem acesso a esta área." });
+      return;
+    }
+    next();
+  };
 }

@@ -1,5 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
-import { PAYMENT_METHODS, type FinanceStatus, type TransactionType } from "../types";
+import type { FinanceStatus, TransactionType } from "../types";
 
 export interface IFinanceEntry extends Document {
   _id: Types.ObjectId;
@@ -13,6 +13,10 @@ export interface IFinanceEntry extends Document {
   status: FinanceStatus;
   payment: string;
   recurringId?: Types.ObjectId;
+  /** Vínculos opcionais com a negociação e o cliente da base. */
+  leadId?: Types.ObjectId;
+  contactId?: Types.ObjectId;
+  companyId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,8 +31,11 @@ const FinanceEntrySchema = new Schema<IFinanceEntry>(
     value: { type: Number, required: true, min: 0 },
     date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
     status: { type: String, enum: ["received", "pending", "paid", "planned"], required: true },
-    payment: { type: String, enum: PAYMENT_METHODS, default: "Pix" },
+    payment: { type: String, trim: true, default: "Pix" },
     recurringId: { type: Schema.Types.ObjectId, ref: "RecurringExpense" },
+    leadId: { type: Schema.Types.ObjectId, ref: "Lead" },
+    contactId: { type: Schema.Types.ObjectId, ref: "Contact" },
+    companyId: { type: Schema.Types.ObjectId, ref: "Company" },
   },
   { timestamps: true },
 );

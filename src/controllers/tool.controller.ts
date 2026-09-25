@@ -1,7 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import ToolDocument from "../models/ToolDocument";
+import { hasModule } from "../lib/permissions";
 import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
-import type { ToolKey } from "../types";
+import { TOOL_MODULES, type ToolKey } from "../types";
 
 const TOOLS: ToolKey[] = ["proposal", "contract", "budget", "briefing"];
 
@@ -9,6 +10,10 @@ function toolParam(req: Request, res: Response): ToolKey | null {
   const tool = req.params.tool as ToolKey;
   if (!TOOLS.includes(tool)) {
     res.status(404).json({ error: "Ferramenta não encontrada." });
+    return null;
+  }
+  if (!hasModule(req.user!, TOOL_MODULES[tool])) {
+    res.status(403).json({ error: "Seu usuário não tem acesso a esta ferramenta." });
     return null;
   }
   return tool;

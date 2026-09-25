@@ -10,6 +10,8 @@ export interface IUser extends Document {
   role: UserRole;
   avatarUrl?: string;
   isActive: boolean;
+  /** Módulos liberados (vazio = padrão do papel). O admin sempre tem todos. */
+  permissions: string[];
   createdAt: Date;
   updatedAt: Date;
   comparePassword(plainPassword: string): Promise<boolean>;
@@ -33,6 +35,7 @@ const UserSchema = new Schema<IUser>(
     },
     avatarUrl: { type: String },
     isActive: { type: Boolean, default: true },
+    permissions: { type: [String], default: [] },
   },
   { timestamps: true },
 );

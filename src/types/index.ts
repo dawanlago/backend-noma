@@ -3,16 +3,70 @@ export type TransactionType = "income" | "expense";
 export type FinanceStatus = "received" | "pending" | "paid" | "planned";
 export type ToolKey = "proposal" | "contract" | "budget" | "briefing";
 
-export const LEAD_STAGES = [
-  "new",
-  "first_contact",
-  "meeting",
-  "proposal_sent",
-  "awaiting",
-  "negotiation",
-  "won",
+/** Áreas do sistema que podem ser liberadas por usuário. */
+export const MODULES = [
+  "crm",
+  "atividades",
+  "anotacoes",
+  "formularios",
+  "prospeccao",
+  "followup",
+  "propostas",
+  "orcamento",
+  "contratos",
+  "briefing",
+  "financeiro",
+  "biblioteca",
+  "base",
+  "produtos",
+  "configuracoes",
 ] as const;
-export type LeadStage = (typeof LEAD_STAGES)[number];
+export type ModuleKey = (typeof MODULES)[number];
+
+const COMMERCIAL: ModuleKey[] = [
+  "crm",
+  "atividades",
+  "anotacoes",
+  "formularios",
+  "prospeccao",
+  "followup",
+  "propostas",
+  "orcamento",
+  "contratos",
+  "briefing",
+  "biblioteca",
+  "base",
+  "produtos",
+];
+
+/** Acessos sugeridos ao criar um usuário (o admin sempre tem tudo). */
+export const DEFAULT_PERMISSIONS: Record<UserRole, ModuleKey[]> = {
+  admin: [...MODULES],
+  manager: [...COMMERCIAL, "financeiro"],
+  seller: COMMERCIAL,
+};
+
+export const TOOL_MODULES: Record<ToolKey, ModuleKey> = {
+  proposal: "propostas",
+  contract: "contratos",
+  budget: "orcamento",
+  briefing: "briefing",
+};
+
+/** Etapas do antigo funil fixo; usadas para migrar os leads para o funil padrão. */
+export const LEGACY_LEAD_STAGES = [
+  { key: "new", name: "Novo lead" },
+  { key: "first_contact", name: "Primeiro contato" },
+  { key: "meeting", name: "Reunião marcada" },
+  { key: "proposal_sent", name: "Proposta enviada" },
+  { key: "awaiting", name: "Aguardando resposta" },
+  { key: "negotiation", name: "Em negociação" },
+  { key: "won", name: "Fechado / ganho" },
+] as const;
+
+export type StageKind = "open" | "won" | "lost";
+export type LeadStatus = StageKind;
+export type LeadTemperature = "cold" | "warm" | "hot";
 
 export const LEAD_SERVICES = [
   "Conteúdo mensal",
@@ -47,3 +101,25 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 
 export const PAYMENT_METHODS = ["Pix", "Transferência", "Cartão", "Dinheiro", "Boleto", "Outro"] as const;
+
+export const CUSTOM_FIELD_ENTITIES = ["lead", "contact", "company", "prospecting"] as const;
+export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
+export const CUSTOM_FIELD_TYPES = ["text", "textarea", "number", "date", "select", "multiselect"] as const;
+export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
+
+export const FORM_FIELD_TYPES = [
+  "text",
+  "textarea",
+  "email",
+  "phone",
+  "number",
+  "date",
+  "select",
+  "multiselect",
+  "checkbox",
+] as const;
+export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
+
+/** Para qual dado do contato/negociação a resposta do formulário vai. */
+export const FORM_FIELD_TARGETS = ["", "name", "email", "phone", "company", "instagram"] as const;
+export type FormFieldTarget = (typeof FORM_FIELD_TARGETS)[number];

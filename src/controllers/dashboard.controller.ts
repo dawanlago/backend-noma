@@ -1,20 +1,27 @@
 import type { NextFunction, Request, Response } from "express";
 import FinanceEntry from "../models/FinanceEntry";
 import Lead from "../models/Lead";
+import Task from "../models/Task";
 import ToolDocument from "../models/ToolDocument";
+import { hasModule } from "../lib/permissions";
 import { ownerScope } from "../lib/ownership";
 
 export async function getDashboard(req: Request, res: Response, next: NextFunction) {
   try {
     const scope = ownerScope(req);
     const month = new Date().toISOString().slice(0, 7);
-    const [leads, entries, documents] = await Promise.all([
-      Lead.find(scope).select("stage value nextActionDate").lean(),
-      FinanceEntry.find({ ...scope, date: { $regex: `^${month}-` } }).select("type status value").lean(),
+    const canSeeFinance = hasModule(req.user!, "financeiro");
+    const [leads, entries, documents, tasks] = await Promise.all([
+      Lead.find(scope).select("status value nextActionDate").lean(),
+      canSeeFinance
+        ? FinanceEntry.find({ ...scope, date: { $regex: `^${month}-` } }).select("type status value").lean()
+        : Promise.resolve([]),
       ToolDocument.aggregate<{ _id: string; count: number }>([
         { $match: scope },
         { $group: { _id: "$tool", count: { $sum: 1 } } },
       ]),
+      // A prévia do checklist mostra só as atividades de quem está logado.
+      Task.find({ ownerId: req.user!._id, done: false }).lean(),
     ]);
 
     const sum = (filter: (entry: (typeof entries)[number]) => boolean) =>
@@ -22,21 +29,31 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
     const received = sum((e) => e.type === "income" && e.status === "received");
     const expenses = sum((e) => e.type === "expense" && e.status === "paid");
     const today = new Date().toISOString().slice(0, 10);
+    const pendingTasks = tasks.sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
 
     res.json({
       data: {
         leadsCount: leads.length,
-        openPipeline: leads.filter((l) => l.stage !== "won").reduce((t, l) => t + l.value, 0),
-        wonValue: leads.filter((l) => l.stage === "won").reduce((t, l) => t + l.value, 0),
+        openPipeline: leads.filter((l) => l.status === "open").reduce((t, l) => t + l.value, 0),
+        wonValue: leads.filter((l) => l.status === "won").reduce((t, l) => t + l.value, 0),
         leadsDueToday: leads.filter(
-          (l) => l.stage !== "won" && l.nextActionDate && l.nextActionDate.toISOString().slice(0, 10) <= today,
+          (l) => l.status === "open" && l.nextActionDate && l.nextActionDate.toISOString().slice(0, 10) <= today,
         ).length,
         month,
-        monthReceived: received,
-        monthExpenses: expenses,
-        monthResult: received - expenses,
-        monthPending: sum((e) => e.type === "income" && e.status === "pending"),
+        finance: canSeeFinance
+          ? {
+              monthReceived: received,
+              monthExpenses: expenses,
+              monthResult: received - expenses,
+              monthPending: sum((e) => e.type === "income" && e.status === "pending"),
+            }
+          : null,
         documents: Object.fromEntries(documents.map((d) => [d._id, d.count])),
+        tasks: {
+          pending: pendingTasks.length,
+          overdue: pendingTasks.filter((task) => task.dueDate && task.dueDate < today).length,
+          preview: pendingTasks.slice(0, 6),
+        },
       },
     });
   } catch (error) {

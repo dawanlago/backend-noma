@@ -1,7 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../config/env";
-import User from "../models/User";
+import User, { type IUser } from "../models/User";
+import { effectivePermissions } from "../lib/permissions";
+
+/** Usuário com os módulos que ele realmente pode acessar. */
+function withPermissions(user: IUser) {
+  return { ...user.toJSON(), permissions: effectivePermissions(user) };
+}
 
 function createToken(userId: string) {
   return jwt.sign({ userId }, env.jwtSecret, {
@@ -32,7 +38,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
     res.json({
       token,
-      user: user.toJSON(),
+      user: withPermissions(user),
     });
   } catch (error) {
     next(error);
@@ -40,5 +46,5 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 }
 
 export function me(req: Request, res: Response) {
-  res.json({ user: req.user });
+  res.json({ user: withPermissions(req.user!) });
 }
