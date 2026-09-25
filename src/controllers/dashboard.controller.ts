@@ -1,51 +1,42 @@
-import type { Request, Response, NextFunction } from "express";
-import Company from "../models/Company";
-import Deal from "../models/Deal";
-import NPSRating from "../models/NPSRating";
-import Transaction from "../models/Transaction";
-import Funnel from "../models/Funnel";
+import type { NextFunction, Request, Response } from "express";
+import FinanceEntry from "../models/FinanceEntry";
+import Lead from "../models/Lead";
+import ToolDocument from "../models/ToolDocument";
+import { ownerScope } from "../lib/ownership";
 
 export async function getDashboard(req: Request, res: Response, next: NextFunction) {
   try {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const isAdmin = req.user?.role === "admin";
-
-    const [deals, activeCompanies, transactions, ratings, funnels] = await Promise.all([
-      Deal.find().sort({ createdAt: -1 }),
-      Company.countDocuments({ isActive: true }),
-      isAdmin ? Transaction.find({ date: { $gte: monthStart } }) : Promise.resolve([] as Awaited<ReturnType<typeof Transaction.find>>),
-      NPSRating.find({ date: { $gte: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000) } }),
-      Funnel.find(),
+    const scope = ownerScope(req);
+    const month = new Date().toISOString().slice(0, 7);
+    const [leads, entries, documents] = await Promise.all([
+      Lead.find(scope).select("stage value nextActionDate").lean(),
+      FinanceEntry.find({ ...scope, date: { $regex: `^${month}-` } }).select("type status value").lean(),
+      ToolDocument.aggregate<{ _id: string; count: number }>([
+        { $match: scope },
+        { $group: { _id: "$tool", count: { $sum: 1 } } },
+      ]),
     ]);
 
-    const openDeals = deals.filter((deal) => deal.value >= 0);
-    const pipelineValue = openDeals.reduce((sum, deal) => sum + deal.value, 0);
-
-    const income = transactions
-      .filter((item) => item.type === "income")
-      .reduce((sum, item) => sum + item.value, 0);
-    const expense = transactions
-      .filter((item) => item.type === "expense")
-      .reduce((sum, item) => sum + item.value, 0);
-
-    const averageNps =
-      ratings.length > 0
-        ? ratings.reduce((sum, item) => sum + item.rating, 0) / ratings.length
-        : null;
+    const sum = (filter: (entry: (typeof entries)[number]) => boolean) =>
+      entries.filter(filter).reduce((total, entry) => total + entry.value, 0);
+    const received = sum((e) => e.type === "income" && e.status === "received");
+    const expenses = sum((e) => e.type === "expense" && e.status === "paid");
+    const today = new Date().toISOString().slice(0, 10);
 
     res.json({
       data: {
-        openDeals: openDeals.length,
-        pipelineValue,
-        activeCompanies,
-        averageNps,
-        monthlyIncome: isAdmin ? income : null,
-        monthlyExpense: isAdmin ? expense : null,
-        monthlyBalance: isAdmin ? income - expense : null,
-        funnelsCount: funnels.length,
-        recentDeals: deals.slice(0, 5),
-        canViewFinance: isAdmin,
+        leadsCount: leads.length,
+        openPipeline: leads.filter((l) => l.stage !== "won").reduce((t, l) => t + l.value, 0),
+        wonValue: leads.filter((l) => l.stage === "won").reduce((t, l) => t + l.value, 0),
+        leadsDueToday: leads.filter(
+          (l) => l.stage !== "won" && l.nextActionDate && l.nextActionDate.toISOString().slice(0, 10) <= today,
+        ).length,
+        month,
+        monthReceived: received,
+        monthExpenses: expenses,
+        monthResult: received - expenses,
+        monthPending: sum((e) => e.type === "income" && e.status === "pending"),
+        documents: Object.fromEntries(documents.map((d) => [d._id, d.count])),
       },
     });
   } catch (error) {

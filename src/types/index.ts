@@ -1,24 +1,49 @@
 export type UserRole = "admin" | "manager" | "seller";
-export type DealTemperature = "cold" | "warm" | "hot";
-export type StageType = "agenda" | "closure" | "general";
 export type TransactionType = "income" | "expense";
-export type DealSource = "whatsapp" | "instagram" | "landing_page" | "manual";
-export type TaskStatus = "todo" | "doing" | "done";
-export type FormFieldType =
-  | "text"
-  | "textarea"
-  | "number"
-  | "date"
-  | "email"
-  | "phone"
-  | "select"
-  | "multiselect"
-  | "boolean";
-export type NotificationType =
-  | "deal_assigned"
-  | "owner_changed"
-  | "task_created"
-  | "deal_stage_changed"
-  | "form_submitted"
-  | "finance_reverted";
-export type NotePermission = "view" | "edit";
+export type FinanceStatus = "received" | "pending" | "paid" | "planned";
+export type ToolKey = "proposal" | "contract" | "budget" | "briefing";
+
+export const LEAD_STAGES = [
+  "new",
+  "first_contact",
+  "meeting",
+  "proposal_sent",
+  "awaiting",
+  "negotiation",
+  "won",
+] as const;
+export type LeadStage = (typeof LEAD_STAGES)[number];
+
+export const LEAD_SERVICES = [
+  "Conteúdo mensal",
+  "Institucional",
+  "Evento",
+  "Produto",
+  "Depoimentos",
+  "Foto + Vídeo",
+  "Outro",
+] as const;
+
+export const INCOME_CATEGORIES = [
+  "Contrato mensal",
+  "Evento",
+  "Produção avulsa",
+  "Edição",
+  "Fotografia",
+  "Outro",
+] as const;
+
+export const EXPENSE_CATEGORIES = [
+  "Software",
+  "Equipamento",
+  "Transporte",
+  "Alimentação",
+  "Freelancer",
+  "Marketing",
+  "Contabilidade",
+  "Impostos",
+  "Estrutura",
+  "Outros",
+] as const;
+
+export const PAYMENT_METHODS = ["Pix", "Transferência", "Cartão", "Dinheiro", "Boleto", "Outro"] as const;

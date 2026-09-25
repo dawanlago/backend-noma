@@ -1,7 +1,6 @@
 import { connectToDatabase } from "../config/db";
 import { seedAdminUser } from "./seedAdmin";
-import { seedDefaultFunnel } from "./seedDefaultFunnel";
-import { seedFinancialCategories } from "./seedFinancialCategories";
+import { seedLibrary } from "./seedLibrary";
 
 let started: Promise<void> | null = null;
 
@@ -10,8 +9,7 @@ export function bootstrapApp() {
     started = (async () => {
       await connectToDatabase();
       await seedAdminUser();
-      await seedDefaultFunnel();
-      await seedFinancialCategories();
+      await seedLibrary();
     })();
   }
 
