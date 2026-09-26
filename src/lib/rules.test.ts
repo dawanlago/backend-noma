@@ -7,6 +7,7 @@ import { contactFromAnswers, normalizeFormFields, validateAnswers } from "./form
 import { legacyLeadPatch } from "./leadMigration";
 import { npsGroup, npsScore } from "./nps";
 import { upcomingBirthdays } from "./birthdays";
+import { phoneKey, samePhone } from "./phone";
 import { isOwnCloudinaryUrl, signParams } from "./cloudinary";
 import { legacyAnswers, legacyDealToLead, legacyFormFields, legacyStageKind, legacyTaskPatch, splitLegacyDate } from "./legacyMigration";
 
@@ -199,5 +200,24 @@ describe("aniversários", () => {
     ]);
     expect(upcomingBirthdays(people, "2026-12-30", 10).map((p) => [p.name, p.date])).toEqual([["Janeiro", "2027-01-03"]]);
     expect(upcomingBirthdays(people, "2027-02-27", 3).map((p) => p.date)).toEqual(["2027-02-28"]);
+  });
+});
+
+describe("telefone", () => {
+  it("reconhece o mesmo celular com máscara, DDI e sem o 9", () => {
+    expect(samePhone("(11) 98888-7777", "5511988887777")).toBe(true);
+    expect(samePhone("(11) 98888-7777", "551188887777")).toBe(true);
+    expect(samePhone("11 8888-7777", "+55 11 98888-7777")).toBe(true);
+  });
+
+  it("não confunde DDDs nem números curtos", () => {
+    expect(samePhone("(11) 98888-7777", "(21) 98888-7777")).toBe(false);
+    expect(samePhone("", "")).toBe(false);
+    expect(phoneKey("1234")).toBe("");
+  });
+
+  it("fixo brasileiro e número estrangeiro", () => {
+    expect(phoneKey("(11) 3333-4444")).toBe("1133334444");
+    expect(samePhone("+1 415 555 0100", "14155550100")).toBe(true);
   });
 });

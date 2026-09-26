@@ -7,6 +7,7 @@ import Lead from "../models/Lead";
 import NPSRating from "../models/NPSRating";
 import StoredFile from "../models/StoredFile";
 import { recordScope, withOwnerNames } from "../lib/ownership";
+import { phoneKey } from "../lib/phone";
 
 /* Base de dados: contatos (pessoas) e empresas, com perfil e históricos. */
 
@@ -58,6 +59,23 @@ export async function listContacts(req: Request, res: Response, next: NextFuncti
     if (typeof req.query.companyId === "string" && isValidObjectId(req.query.companyId)) filter.companyId = req.query.companyId;
     const data = await Contact.find(filter).sort({ name: 1 }).lean();
     res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Contatos com o mesmo telefone (usado pela extensão do WhatsApp). GET /contacts/by-phone?phone= */
+export async function findContactsByPhone(req: Request, res: Response, next: NextFunction) {
+  try {
+    const key = phoneKey(String(req.query.phone || ""));
+    if (!key) {
+      res.json({ data: [] });
+      return;
+    }
+    // Os últimos 4 dígitos filtram no banco; a comparação completa é feita aqui.
+    const tail = key.slice(-4).split("").join("\\D*");
+    const candidates = await Contact.find({ phone: { $regex: `${tail}\\D*$` } }).lean();
+    res.json({ data: candidates.filter((contact) => phoneKey(contact.phone) === key) });
   } catch (error) {
     next(error);
   }

@@ -92,6 +92,7 @@ import {
   deleteContact,
   getCompany,
   getCompanyProfile,
+  findContactsByPhone,
   getContact,
   getContactProfile,
   listCompanies,
@@ -163,6 +164,7 @@ router.delete("/companies/:id", requireModule("base"), deleteCompany);
 
 router.get("/contacts", listContacts);
 router.post("/contacts", baseWrite, createContact);
+router.get("/contacts/by-phone", findContactsByPhone);
 router.get("/contacts/:id", getContact);
 router.get("/contacts/:id/profile", getContactProfile);
 router.patch("/contacts/:id", baseWrite, updateContact);
