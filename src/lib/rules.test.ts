@@ -208,6 +208,9 @@ describe("telefone", () => {
     expect(samePhone("(11) 98888-7777", "5511988887777")).toBe(true);
     expect(samePhone("(11) 98888-7777", "551188887777")).toBe(true);
     expect(samePhone("11 8888-7777", "+55 11 98888-7777")).toBe(true);
+    // Caso real: WhatsApp mostra sem o 9, o cadastro tem o 9.
+    expect(samePhone("(73) 98893-6370", "+55 73 8893-6370")).toBe(true);
+    expect(samePhone("(73) 98893-6370", "557388936370")).toBe(true);
   });
 
   it("não confunde DDDs nem números curtos", () => {
