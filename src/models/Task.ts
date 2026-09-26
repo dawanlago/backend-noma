@@ -19,6 +19,10 @@ export interface ITask extends Document {
   doneAt?: Date;
   leadId?: Types.ObjectId;
   notes: string;
+  /** Duração em minutos (compromissos com hora). */
+  duration: number;
+  /** Evento correspondente no Google Agenda do responsável. */
+  googleEventId: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +38,8 @@ const TaskSchema = new Schema<ITask>(
     doneAt: { type: Date },
     leadId: { type: Schema.Types.ObjectId, ref: "Lead" },
     notes: { type: String, default: "" },
+    duration: { type: Number, default: 60, min: 5, max: 1440 },
+    googleEventId: { type: String, default: "" },
   },
   { timestamps: true },
 );

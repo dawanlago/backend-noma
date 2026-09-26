@@ -28,4 +28,13 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET || "noma-crm-dev-jwt-secret-change-me",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   cloudinary: parseCloudinaryUrl(process.env.CLOUDINARY_URL),
+  /** Integração com o Google Agenda (OAuth por usuário). */
+  google:
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI
+      ? {
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          redirectUri: process.env.GOOGLE_REDIRECT_URI,
+        }
+      : null,
 };

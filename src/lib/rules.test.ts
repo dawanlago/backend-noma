@@ -8,6 +8,8 @@ import { legacyLeadPatch } from "./leadMigration";
 import { npsGroup, npsScore } from "./nps";
 import { upcomingBirthdays } from "./birthdays";
 import { phoneKey, samePhone } from "./phone";
+import { addMinutes, emailFromIdToken, eventBody, shouldSync } from "./googleCalendar";
+import { open, seal } from "./secretBox";
 import { isOwnCloudinaryUrl, signParams } from "./cloudinary";
 import { legacyAnswers, legacyDealToLead, legacyFormFields, legacyStageKind, legacyTaskPatch, splitLegacyDate } from "./legacyMigration";
 
@@ -222,5 +224,40 @@ describe("telefone", () => {
   it("fixo brasileiro e número estrangeiro", () => {
     expect(phoneKey("(11) 3333-4444")).toBe("1133334444");
     expect(samePhone("+1 415 555 0100", "14155550100")).toBe(true);
+  });
+});
+
+describe("google agenda", () => {
+  it("calcula o fim do evento, inclusive virando o dia", () => {
+    expect(addMinutes("2026-09-26", "10:00", 60)).toBe("2026-09-26T11:00:00");
+    expect(addMinutes("2026-09-26", "23:30", 90)).toBe("2026-09-27T01:00:00");
+    expect(addMinutes("2026-12-31", "23:00", 60)).toBe("2027-01-01T00:00:00");
+  });
+
+  it("só sincroniza compromissos com data e hora", () => {
+    expect(shouldSync({ dueDate: "2026-09-26", time: "14:00" })).toBe(true);
+    expect(shouldSync({ dueDate: "2026-09-26", time: "" })).toBe(false);
+    expect(shouldSync({ dueDate: "", time: "14:00" })).toBe(false);
+  });
+
+  it("monta o evento com fuso de São Paulo, link da negociação e marca de concluído", () => {
+    const body = eventBody(
+      { title: "Reunião", notes: "Levar portfólio", dueDate: "2026-10-01", time: "09:30", duration: 45, done: true },
+      { id: "abc", name: "Clipe Aurora" },
+    );
+    expect(body.summary).toBe("✓ Reunião");
+    expect(body.start).toEqual({ dateTime: "2026-10-01T09:30:00", timeZone: "America/Sao_Paulo" });
+    expect(body.end.dateTime).toBe("2026-10-01T10:15:00");
+    expect(body.description).toContain("Levar portfólio");
+    expect(body.description).toContain("/crm/abc");
+  });
+
+  it("lê o e-mail do id_token e guarda o token criptografado", () => {
+    const payload = Buffer.from(JSON.stringify({ email: "dev@nomacria.com" })).toString("base64url");
+    expect(emailFromIdToken(`x.${payload}.y`)).toBe("dev@nomacria.com");
+    expect(emailFromIdToken("lixo")).toBe("");
+    const sealed = seal("refresh-token-123");
+    expect(sealed).not.toContain("refresh-token-123");
+    expect(open(sealed)).toBe("refresh-token-123");
   });
 });

@@ -3,12 +3,14 @@ import { isValidObjectId } from "mongoose";
 import Lead from "../models/Lead";
 import Task, { type ITask } from "../models/Task";
 import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
+import { removeEvent, syncTask } from "../lib/googleCalendar";
 
 function applyBody(task: ITask, body: Record<string, unknown>) {
   if (typeof body.title === "string") task.title = body.title.trim();
   if (typeof body.notes === "string") task.notes = body.notes;
   if (typeof body.dueDate === "string") task.dueDate = body.dueDate.slice(0, 10);
   if (typeof body.time === "string") task.time = body.time.slice(0, 5);
+  if (body.duration !== undefined) task.duration = Math.min(1440, Math.max(5, Math.round(Number(body.duration) || 60)));
   if (typeof body.status === "string" && ["todo", "doing", "done"].includes(body.status)) {
     task.status = body.status as ITask["status"];
   } else if (typeof body.done === "boolean") {
@@ -64,6 +66,7 @@ export async function createTask(req: Request, res: Response, next: NextFunction
     const task = new Task({ ownerId: req.user!._id });
     applyBody(task, req.body);
     await task.save();
+    await syncTask(task);
     const [data] = await withLeadNames([task.toJSON()]);
     res.status(201).json({ data: { ...data, ownerName: req.user!.name } });
   } catch (error) {
@@ -80,6 +83,7 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
     }
     applyBody(task, req.body);
     await task.save();
+    await syncTask(task);
     const [data] = await withLeadNames([task.toJSON()]);
     res.json({ data });
   } catch (error) {
@@ -94,6 +98,7 @@ export async function deleteTask(req: Request, res: Response, next: NextFunction
       res.status(404).json({ error: "Atividade não encontrada." });
       return;
     }
+    if (task.googleEventId) await removeEvent(String(task.ownerId), task.googleEventId);
     res.status(204).send();
   } catch (error) {
     next(error);

@@ -112,6 +112,7 @@ import {
   updateSurvey,
 } from "../controllers/nps.controller";
 import { requireAdmin, requireAuth, requireModule } from "../middlewares/auth";
+import { googleCallback, googleConnect, googleDisconnect, googleStatus } from "../controllers/google.controller";
 
 const router = Router();
 
@@ -127,7 +128,13 @@ router.post("/public/form-invites/:code", submitInviteByCode);
 router.get("/public/nps/:token", getPublicInvite);
 router.post("/public/nps/:token", respondPublicInvite);
 
+router.get("/google/callback", googleCallback);
+
 router.use(requireAuth);
+
+router.get("/google/status", googleStatus);
+router.get("/google/connect", googleConnect);
+router.delete("/google", googleDisconnect);
 
 const settingsAccess = requireModule("configuracoes");
 const baseWrite = requireModule("base", "crm", "financeiro", "formularios");

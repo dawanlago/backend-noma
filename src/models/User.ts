@@ -12,6 +12,10 @@ export interface IUser extends Document {
   isActive: boolean;
   /** Módulos liberados (vazio = padrão do papel). O admin sempre tem todos. */
   permissions: string[];
+  /** Google Agenda conectado (o refresh token fica criptografado e fora das consultas). */
+  googleEmail?: string;
+  googleRefreshToken?: string;
+  googleConnectedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(plainPassword: string): Promise<boolean>;
@@ -36,6 +40,9 @@ const UserSchema = new Schema<IUser>(
     avatarUrl: { type: String },
     isActive: { type: Boolean, default: true },
     permissions: { type: [String], default: [] },
+    googleEmail: { type: String, default: "" },
+    googleRefreshToken: { type: String, select: false },
+    googleConnectedAt: { type: Date },
   },
   { timestamps: true },
 );
@@ -61,6 +68,7 @@ UserSchema.methods.comparePassword = async function comparePassword(
 UserSchema.set("toJSON", {
   transform: (_doc, ret) => {
     delete ret.password;
+    delete ret.googleRefreshToken;
     return ret;
   },
 });
