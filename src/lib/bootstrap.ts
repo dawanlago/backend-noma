@@ -1,7 +1,7 @@
 import { connectToDatabase } from "../config/db";
 import Company from "../models/Company";
 import { seedAdminUser } from "./seedAdmin";
-import { migrateNewModules, seedFunnelAndMigrateLeads, seedOptionLists } from "./seedDefaults";
+import { migrateLegacyData, migrateNewModules, seedFunnelAndMigrateLeads, seedOptionLists } from "./seedDefaults";
 
 let started: Promise<void> | null = null;
 
@@ -11,6 +11,7 @@ export function bootstrapApp() {
       await connectToDatabase();
       await seedAdminUser();
       await seedOptionLists();
+      await migrateLegacyData();
       await seedFunnelAndMigrateLeads();
       await migrateNewModules();
       // Remove o índice único antigo de CNPJ: agora ele é opcional.

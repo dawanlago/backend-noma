@@ -7,6 +7,7 @@ import { contactFromAnswers, normalizeFormFields, validateAnswers } from "./form
 import { legacyLeadPatch } from "./leadMigration";
 import { npsGroup, npsScore } from "./nps";
 import { isOwnCloudinaryUrl, signParams } from "./cloudinary";
+import { legacyAnswers, legacyDealToLead, legacyFormFields, legacyStageKind, legacyTaskPatch, splitLegacyDate } from "./legacyMigration";
 
 describe("permissões", () => {
   it("admin sempre tem todos os módulos, mesmo com lista salva", () => {
@@ -118,5 +119,64 @@ describe("Cloudinary", () => {
   it("só aceita URLs da própria conta", () => {
     expect(isOwnCloudinaryUrl("https://res.cloudinary.com/minha/raw/upload/x.pdf", "minha")).toBe(true);
     expect(isOwnCloudinaryUrl("https://res.cloudinary.com/outra/raw/upload/x.pdf", "minha")).toBe(false);
+  });
+});
+
+describe("migração da primeira versão", () => {
+  it("etapa 'closure' vira venda feita; demais ficam em andamento", () => {
+    const id = new Types.ObjectId();
+    expect(legacyStageKind({ _id: id, name: "Fechamento", type: "closure" })).toBe("won");
+    expect(legacyStageKind({ _id: id, name: "Agenda", type: "agenda" })).toBe("open");
+    expect(legacyStageKind({ _id: id, name: "Perdido", kind: "lost" })).toBe("lost");
+  });
+
+  it("converte data/hora antiga para Brasília", () => {
+    expect(splitLegacyDate(new Date("2026-10-05T13:30:00Z"))).toEqual({ dueDate: "2026-10-05", time: "10:30" });
+    expect(splitLegacyDate(null)).toEqual({ dueDate: "", time: "" });
+  });
+
+  it("tarefa antiga ganha dono, status e negociação", () => {
+    const userId = new Types.ObjectId();
+    const dealId = new Types.ObjectId();
+    const patch = legacyTaskPatch({ userId, dueDate: new Date("2026-10-05T13:30:00Z"), isCompleted: true, description: "Levar tripé", dealId }, new Set([String(dealId)]));
+    expect(patch.$set).toMatchObject({ ownerId: userId, dueDate: "2026-10-05", time: "10:30", status: "done", done: true, notes: "Levar tripé", leadId: dealId });
+  });
+
+  it("negociação antiga vira lead com pareceres, valor e mesma etapa", () => {
+    const stageOpen = { _id: new Types.ObjectId(), name: "Lead", type: "general" };
+    const stageWon = { _id: new Types.ObjectId(), name: "Fechamento", type: "closure" };
+    const funnel = { _id: new Types.ObjectId(), stages: [stageOpen, stageWon] };
+    const owner = new Types.ObjectId();
+    const lead = legacyDealToLead(
+      {
+        _id: new Types.ObjectId(),
+        title: "Casamento",
+        funnelId: funnel._id,
+        currentStageId: stageWon._id,
+        value: 5000,
+        temperature: "hot",
+        ownerUserId: owner,
+        source: "manual",
+        dossier: { manualNotes: "Cliente indicou" },
+        notes: [{ text: "Fechou!", userId: owner, date: new Date() }],
+      },
+      { funnels: [funnel], products: new Map(), userNames: new Map([[String(owner), "Lai"]]), contactNames: new Map(), companyNames: new Map() },
+    );
+    expect(lead).toMatchObject({ name: "Casamento", status: "won", stageId: stageWon._id, value: 5000, customValue: 5000, temperature: "hot", source: "", notes: "Cliente indicou" });
+    expect(lead.comments[0]).toMatchObject({ text: "Fechou!", authorName: "Lai" });
+  });
+
+  it("formulário e respostas antigos", () => {
+    const fields = legacyFormFields([
+      { key: "email", label: "E-mail", type: "email", order: 1 },
+      { key: "nome", label: "Nome", type: "text", required: true, order: 0 },
+      { key: "aceite", label: "Aceite", type: "boolean", order: 2 },
+    ]);
+    expect(fields.map((field) => [field.key, field.target, field.type])).toEqual([
+      ["nome", "name", "text"],
+      ["email", "email", "email"],
+      ["aceite", "", "checkbox"],
+    ]);
+    expect(legacyAnswers([{ key: "nome", value: "Ana" }])).toEqual({ nome: "Ana" });
   });
 });

@@ -20,7 +20,8 @@ export function recordScope(req: Request): Record<string, unknown> {
 
 /** Anexa `ownerName` aos documentos para o admin saber de quem é cada registro. */
 export async function withOwnerNames<T extends { ownerId?: Types.ObjectId | string }>(docs: T[]) {
-  const ids = [...new Set(docs.map((doc) => String(doc.ownerId)).filter(Boolean))];
+  // Registros antigos podem não ter dono: ignora ids inválidos em vez de quebrar a listagem.
+  const ids = [...new Set(docs.map((doc) => String(doc.ownerId)).filter((id) => isValidObjectId(id)))];
   const users = await User.find({ _id: { $in: ids } }).select("name").lean();
   const names = new Map(users.map((user) => [String(user._id), user.name]));
   return docs.map((doc) => ({ ...doc, ownerName: names.get(String(doc.ownerId)) || "" }));
