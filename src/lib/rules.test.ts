@@ -6,6 +6,7 @@ import { firstOpenStage, firstStageOfKind, normalizeStages, removedStageIds } fr
 import { contactFromAnswers, normalizeFormFields, validateAnswers } from "./forms";
 import { legacyLeadPatch } from "./leadMigration";
 import { npsGroup, npsScore } from "./nps";
+import { isOwnCloudinaryUrl, signParams } from "./cloudinary";
 
 describe("permissões", () => {
   it("admin sempre tem todos os módulos, mesmo com lista salva", () => {
@@ -105,5 +106,17 @@ describe("NPS", () => {
     expect([10, 9, 8, 7, 6, 0].map(npsGroup)).toEqual(["promoter", "promoter", "passive", "passive", "detractor", "detractor"]);
     expect(npsScore([10, 9, 8, 3])).toBe(25);
     expect(npsScore([])).toBe(0);
+  });
+});
+
+describe("Cloudinary", () => {
+  it("assina como a documentação (exemplo oficial)", () => {
+    const params = { eager: "w_400,h_300,c_pad|w_260,h_200,c_crop", public_id: "sample_image", timestamp: 1315060510 };
+    expect(signParams(params, "abcd")).toBe("bfd09f95f331f558cbd1320e67aa8d488770583e");
+  });
+
+  it("só aceita URLs da própria conta", () => {
+    expect(isOwnCloudinaryUrl("https://res.cloudinary.com/minha/raw/upload/x.pdf", "minha")).toBe(true);
+    expect(isOwnCloudinaryUrl("https://res.cloudinary.com/outra/raw/upload/x.pdf", "minha")).toBe(false);
   });
 });

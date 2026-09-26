@@ -76,15 +76,8 @@ import {
   submitPublicForm,
   updateForm,
 } from "../controllers/form.controller";
-import {
-  completeUpload,
-  deleteFile,
-  getChunk,
-  listFiles,
-  putChunk,
-  startUpload,
-  updateFile,
-} from "../controllers/file.controller";
+import { deleteFile, listFiles, registerFile, updateFile } from "../controllers/file.controller";
+import { signUpload } from "../controllers/upload.controller";
 import {
   createContractTemplate,
   deleteContractTemplate,
@@ -262,11 +255,9 @@ router.post("/contract-templates", settingsAccess, createContractTemplate);
 router.patch("/contract-templates/:id", settingsAccess, updateContractTemplate);
 router.delete("/contract-templates/:id", settingsAccess, deleteContractTemplate);
 
+router.post("/uploads/sign", signUpload);
 router.get("/files", contractsAccess, listFiles);
-router.post("/files", contractsAccess, startUpload);
-router.put("/files/:id/chunks/:n", contractsAccess, putChunk);
-router.post("/files/:id/complete", contractsAccess, completeUpload);
-router.get("/files/:id/chunks/:n", contractsAccess, getChunk);
+router.post("/files", contractsAccess, registerFile);
 router.patch("/files/:id", contractsAccess, updateFile);
 router.delete("/files/:id", contractsAccess, deleteFile);
 

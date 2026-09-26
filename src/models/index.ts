@@ -18,7 +18,6 @@ export { default as AppSettings } from "./AppSettings";
 export { default as OptionItem } from "./OptionItem";
 export { default as CustomField } from "./CustomField";
 export { default as StoredFile } from "./StoredFile";
-export { default as FileChunk } from "./FileChunk";
 export { default as ContractTemplate } from "./ContractTemplate";
 export { default as NPSSurvey } from "./NPSSurvey";
 export { default as NPSInvite } from "./NPSInvite";
