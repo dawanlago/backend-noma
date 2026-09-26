@@ -8,6 +8,8 @@ export interface IRecurringExpense extends Document {
   value: number;
   day: number;
   payment: string;
+  cashbox: string;
+  bank: string;
   startMonth: string; // YYYY-MM
   skippedMonths: string[];
   active: boolean;
@@ -23,6 +25,8 @@ const RecurringExpenseSchema = new Schema<IRecurringExpense>(
     value: { type: Number, required: true, min: 0 },
     day: { type: Number, min: 1, max: 31, default: 1 },
     payment: { type: String, default: "Pix" },
+    cashbox: { type: String, trim: true, default: "" },
+    bank: { type: String, trim: true, default: "" },
     startMonth: { type: String, required: true, match: /^\d{4}-\d{2}$/ },
     skippedMonths: { type: [String], default: [] },
     active: { type: Boolean, default: true },

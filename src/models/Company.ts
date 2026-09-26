@@ -15,6 +15,8 @@ export interface ICompany extends Document {
   affinity: number;
   kinds: string[];
   supplierCategory: string;
+  /** Chave PIX para pagar o fornecedor/parceiro. */
+  pixKey: string;
   notes: string;
   custom: Record<string, unknown>;
   isActive: boolean;
@@ -37,6 +39,7 @@ const CompanySchema = new Schema<ICompany>(
     affinity: { type: Number, min: 0, max: 5, default: 0 },
     kinds: { type: [String], default: [] },
     supplierCategory: { type: String, trim: true, default: "" },
+    pixKey: { type: String, trim: true, default: "" },
     notes: { type: String, default: "" },
     custom: { type: Schema.Types.Mixed, default: {} },
     isActive: { type: Boolean, default: true },

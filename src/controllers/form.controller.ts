@@ -17,6 +17,13 @@ import {
 } from "../lib/forms";
 import { firstOpenStage } from "../lib/funnels";
 import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
+import { getSettings } from "../lib/seedDefaults";
+
+/** Identidade da produtora mostrada no topo dos formulários públicos. */
+async function publicBrand() {
+  const settings = await getSettings();
+  return { logo: settings.brand?.logo || "", companyName: settings.companyName || "Noma", color: settings.brand?.defaultColor || "" };
+}
 
 function notFound(res: Response) {
   res.status(404).json({ error: "Formulário não encontrado." });
@@ -139,6 +146,7 @@ export async function getPublicForm(req: Request, res: Response, next: NextFunct
         description: form.description,
         fields: form.fields,
         successMessage: form.successMessage,
+        brand: await publicBrand(),
       },
     });
   } catch (error) {
@@ -326,6 +334,7 @@ export async function getInviteByCode(req: Request, res: Response, next: NextFun
         fields: form.fields,
         successMessage: form.successMessage,
         status: invite.status,
+        brand: await publicBrand(),
         contactFirstName: (contact?.name || "").split(" ")[0] || "",
         prefill: prefillFor(form, contact, lead?.company || ""),
         answers: response

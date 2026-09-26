@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import FinanceEntry from "../models/FinanceEntry";
+import Contact from "../models/Contact";
 import Lead from "../models/Lead";
+import { upcomingBirthdays } from "../lib/birthdays";
 import Task from "../models/Task";
 import ToolDocument from "../models/ToolDocument";
 import { hasModule } from "../lib/permissions";
@@ -11,7 +13,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
     const scope = ownerScope(req);
     const month = new Date().toISOString().slice(0, 7);
     const canSeeFinance = hasModule(req.user!, "financeiro");
-    const [leads, entries, documents, tasks] = await Promise.all([
+    const [leads, entries, documents, tasks, people] = await Promise.all([
       Lead.find(scope).select("status value nextActionDate").lean(),
       canSeeFinance
         ? FinanceEntry.find({ ...scope, date: { $regex: `^${month}-` } }).select("type status value").lean()
@@ -22,6 +24,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
       ]),
       // A prévia do checklist mostra só as atividades de quem está logado.
       Task.find({ ownerId: req.user!._id, done: false }).lean(),
+      Contact.find({ birthDate: { $regex: /^\d{4}-\d{2}-\d{2}$/ } }).select("name birthDate phone photo").lean(),
     ]);
 
     const sum = (filter: (entry: (typeof entries)[number]) => boolean) =>
@@ -49,6 +52,12 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
             }
           : null,
         documents: Object.fromEntries(documents.map((d) => [d._id, d.count])),
+        // Aniversariantes da base nos próximos 15 dias (hoje primeiro).
+        birthdays: upcomingBirthdays(
+          people.map((person) => ({ ...person, name: person.name, birthDate: person.birthDate })),
+          today,
+          15,
+        ).slice(0, 8),
         tasks: {
           pending: pendingTasks.length,
           overdue: pendingTasks.filter((task) => task.dueDate && task.dueDate < today).length,

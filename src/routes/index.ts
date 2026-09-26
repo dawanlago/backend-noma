@@ -14,6 +14,7 @@ import { createUser, updateUser } from "../controllers/user.controller";
 import {
   createEntry,
   deleteEntry,
+  createInstallments,
   getYearSummary,
   listEntries,
   setGoal,
@@ -237,6 +238,7 @@ router.delete("/nps/ratings/:id", npsAccess, deleteRating);
 const financeAccess = requireModule("financeiro");
 router.get("/finance/entries", financeAccess, listEntries);
 router.post("/finance/entries", financeAccess, createEntry);
+router.post("/finance/installments", financeAccess, createInstallments);
 router.patch("/finance/entries/:id", financeAccess, updateEntry);
 router.delete("/finance/entries/:id", financeAccess, deleteEntry);
 router.get("/finance/summary", financeAccess, getYearSummary);

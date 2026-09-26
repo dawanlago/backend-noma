@@ -62,6 +62,8 @@ export const OPTION_LIST_DEFAULTS: Record<string, DefaultOption[]> = {
   incomeCategory: labels(INCOME_CATEGORIES),
   expenseCategory: labels(EXPENSE_CATEGORIES),
   paymentMethod: labels(PAYMENT_METHODS),
+  financeCashbox: labels(["Noma", "Brava"]),
+  bankAccount: [],
   budgetProjectType: labels([
     "Conteúdo para redes sociais",
     "Evento",

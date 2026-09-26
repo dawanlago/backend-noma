@@ -14,6 +14,11 @@ function monthParam(value: unknown) {
   return new Date().toISOString().slice(0, 7);
 }
 
+/** Filtro opcional por caixa (?cashbox=Noma). */
+function cashboxFilter(req: Request): Record<string, unknown> {
+  return typeof req.query.cashbox === "string" && req.query.cashbox ? { cashbox: req.query.cashbox } : {};
+}
+
 function lastDayOfMonth(month: string) {
   const [year, m] = month.split("-").map(Number);
   return new Date(year, m, 0).getDate();
@@ -43,6 +48,8 @@ async function materializeRecurring(scope: Record<string, unknown>, month: strin
       date: `${month}-${String(day).padStart(2, "0")}`,
       status: "planned",
       payment: item.payment,
+      cashbox: item.cashbox || "",
+      bank: item.bank || "",
       recurringId: item._id,
     });
   }
@@ -76,14 +83,20 @@ function goalOwner(req: Request) {
   return scoped || req.user!._id;
 }
 
-/** GET /finance/entries?month=YYYY-MM ou ?year=YYYY (planilha do ano). */
+/** GET /finance/entries?month=YYYY-MM | ?year=YYYY (planilha) | ?leadId= (parcelas da venda); &cashbox= filtra o caixa. */
 export async function listEntries(req: Request, res: Response, next: NextFunction) {
   try {
     const scope = ownerScope(req);
+    const box = cashboxFilter(req);
+    if (typeof req.query.leadId === "string" && isValidObjectId(req.query.leadId)) {
+      const entries = await FinanceEntry.find({ ...recordScope(req), leadId: req.query.leadId }).sort({ date: 1, createdAt: 1 }).lean();
+      res.json({ data: await withOwnerNames(entries) });
+      return;
+    }
     if (typeof req.query.year === "string" && /^\d{4}$/.test(req.query.year)) {
       const year = req.query.year;
       for (let m = 1; m <= 12; m += 1) await materializeRecurring(scope, `${year}-${String(m).padStart(2, "0")}`);
-      const entries = await FinanceEntry.find({ ...scope, date: { $regex: `^${year}-` } })
+      const entries = await FinanceEntry.find({ ...scope, ...box, date: { $regex: `^${year}-` } })
         .sort({ date: 1, createdAt: 1 })
         .lean();
       res.json({ data: await withOwnerNames(entries), meta: { year } });
@@ -91,10 +104,10 @@ export async function listEntries(req: Request, res: Response, next: NextFunctio
     }
     const month = monthParam(req.query.month);
     await materializeRecurring(scope, month);
-    const entries = await FinanceEntry.find({ ...scope, date: { $regex: `^${month}-` } })
+    const entries = await FinanceEntry.find({ ...scope, ...box, date: { $regex: `^${month}-` } })
       .sort({ date: -1, createdAt: -1 })
       .lean();
-    const goal = await MonthlyGoal.findOne({ ownerId: goalOwner(req), month }).lean();
+    const goal = await MonthlyGoal.findOne({ ownerId: goalOwner(req), month, cashbox: String(box.cashbox || "") }).lean();
     res.json({ data: await withOwnerNames(entries), meta: { month, goal: goal?.value || 0 } });
   } catch (error) {
     next(error);
@@ -116,6 +129,8 @@ export async function createEntry(req: Request, res: Response, next: NextFunctio
         value: entry.value,
         day: Number(entry.date.slice(8, 10)),
         payment: entry.payment,
+        cashbox: entry.cashbox,
+        bank: entry.bank,
         startMonth: entry.date.slice(0, 7),
       });
       entry.recurringId = series._id;
@@ -152,6 +167,8 @@ export async function updateEntry(req: Request, res: Response, next: NextFunctio
         value: entry.value,
         day: Number(entry.date.slice(8, 10)),
         payment: entry.payment,
+        cashbox: entry.cashbox,
+        bank: entry.bank,
         startMonth: entry.date.slice(0, 7),
         skippedMonths: [],
       });
@@ -197,7 +214,7 @@ export async function deleteEntry(req: Request, res: Response, next: NextFunctio
 export async function getYearSummary(req: Request, res: Response, next: NextFunction) {
   try {
     const year = /^\d{4}$/.test(String(req.query.year)) ? String(req.query.year) : String(new Date().getFullYear());
-    const entries = await FinanceEntry.find({ ...ownerScope(req), date: { $regex: `^${year}-` } }).lean();
+    const entries = await FinanceEntry.find({ ...ownerScope(req), ...cashboxFilter(req), date: { $regex: `^${year}-` } }).lean();
     const months = Array.from({ length: 12 }, (_, index) => ({
       month: `${year}-${String(index + 1).padStart(2, "0")}`,
       received: 0,
@@ -224,12 +241,66 @@ export async function setGoal(req: Request, res: Response, next: NextFunction) {
   try {
     const month = monthParam(req.params.month);
     const value = Math.max(0, Number(req.body.value) || 0);
+    const cashbox = typeof req.body.cashbox === "string" ? req.body.cashbox : "";
     const goal = await MonthlyGoal.findOneAndUpdate(
-      { ownerId: req.user!._id, month },
+      { ownerId: req.user!._id, month, cashbox },
       { value },
-      { new: true, upsert: true },
+      { returnDocument: "after", upsert: true },
     );
     res.json({ data: goal.toJSON() });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const MONEY = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * POST /finance/installments — lança uma venda no financeiro, à vista ou em
+ * parcelas (ex.: boletos). Cada parcela vira uma entrada ligada à negociação.
+ */
+export async function createInstallments(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = stripOwner(req.body) as Record<string, unknown>;
+    const items = Array.isArray(body.installments) ? (body.installments as Record<string, unknown>[]) : [];
+    const parcels = items
+      .map((item) => ({ value: MONEY(Math.max(0, Number(item.value) || 0)), date: String(item.date || "") }))
+      .filter((item) => item.value > 0 && /^\d{4}-\d{2}-\d{2}$/.test(item.date));
+    if (!parcels.length || parcels.length !== items.length || parcels.length > 60) {
+      res.status(400).json({ error: "Informe valor e data de cada parcela." });
+      return;
+    }
+    const description = String(body.description || "").trim();
+    if (!description) {
+      res.status(400).json({ error: "Informe a descrição." });
+      return;
+    }
+    const links = linkUpdates(body);
+    const received = body.firstReceived === true;
+    const docs = [];
+    for (const [index, parcel] of parcels.entries()) {
+      const entry = new FinanceEntry({
+        ownerId: req.user!._id,
+        type: "income",
+        description,
+        client: String(body.client || "").trim(),
+        category: String(body.category || "Outro"),
+        value: parcel.value,
+        date: parcel.date,
+        status: received && index === 0 ? "received" : "pending",
+        payment: String(body.payment || "Pix"),
+        cashbox: String(body.cashbox || ""),
+        bank: String(body.bank || ""),
+        notes: String(body.notes || ""),
+        ...(parcels.length > 1 ? { installment: { number: index + 1, total: parcels.length } } : {}),
+        ...links.set,
+      });
+      await fillClientName(entry);
+      docs.push(entry);
+    }
+    await Promise.all(docs.map((doc) => doc.validate()));
+    const saved = await FinanceEntry.insertMany(docs);
+    res.status(201).json({ data: saved.map((doc) => doc.toJSON()) });
   } catch (error) {
     next(error);
   }

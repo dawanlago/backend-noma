@@ -12,6 +12,13 @@ export interface IFinanceEntry extends Document {
   date: string; // YYYY-MM-DD, sem fuso horário
   status: FinanceStatus;
   payment: string;
+  /** Caixa (ex.: Noma, Brava): separa financeiros diferentes. */
+  cashbox: string;
+  /** Banco/conta de onde saiu ou para onde entrou. */
+  bank: string;
+  notes: string;
+  /** Parcela de uma venda dividida (ex.: 2 de 3). */
+  installment?: { number: number; total: number };
   recurringId?: Types.ObjectId;
   /** Vínculos opcionais com a negociação e o cliente da base. */
   leadId?: Types.ObjectId;
@@ -32,6 +39,13 @@ const FinanceEntrySchema = new Schema<IFinanceEntry>(
     date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
     status: { type: String, enum: ["received", "pending", "paid", "planned"], required: true },
     payment: { type: String, trim: true, default: "Pix" },
+    cashbox: { type: String, trim: true, default: "" },
+    bank: { type: String, trim: true, default: "" },
+    notes: { type: String, default: "" },
+    installment: {
+      type: new Schema({ number: { type: Number, min: 1 }, total: { type: Number, min: 1 } }, { _id: false }),
+      default: undefined,
+    },
     recurringId: { type: Schema.Types.ObjectId, ref: "RecurringExpense" },
     leadId: { type: Schema.Types.ObjectId, ref: "Lead" },
     contactId: { type: Schema.Types.ObjectId, ref: "Contact" },
@@ -42,6 +56,7 @@ const FinanceEntrySchema = new Schema<IFinanceEntry>(
 
 FinanceEntrySchema.index({ ownerId: 1, date: 1 });
 FinanceEntrySchema.index({ recurringId: 1, date: 1 });
+FinanceEntrySchema.index({ leadId: 1, date: 1 });
 
 const FinanceEntry: Model<IFinanceEntry> =
   models.FinanceEntry || model<IFinanceEntry>("FinanceEntry", FinanceEntrySchema);

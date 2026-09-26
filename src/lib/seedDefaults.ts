@@ -10,6 +10,7 @@ import Form from "../models/Form";
 import FormResponse from "../models/FormResponse";
 import FormInvite from "../models/FormInvite";
 import NPSInvite from "../models/NPSInvite";
+import MonthlyGoal from "../models/MonthlyGoal";
 import { newPublicId } from "./forms";
 import {
   legacyAnswers,
@@ -209,4 +210,31 @@ async function runLegacyMigration() {
 
   // Índices únicos antigos (ex.: dealId+formId) bloqueariam respostas novas; alinha com os schemas atuais.
   await Promise.all([Task, Note, NoteGroup, Form, FormResponse, FormInvite, NPSInvite].map((model) => model.syncIndexes()));
+}
+
+/**
+ * Caixas do financeiro: o que já existia era todo da Noma. Entradas, despesas
+ * recorrentes e metas sem caixa passam para o primeiro caixa cadastrado.
+ */
+export async function migrateFinanceCashbox() {
+  const key = "finance-cashbox-v1";
+  const settings = await getSettings();
+  if (!settings.migrations.includes(key)) {
+    const first = await OptionItem.findOne({ list: "financeCashbox" }).sort({ order: 1 }).lean();
+    const cashbox = first?.value || "Noma";
+    const nativeDb = Funnel.db.db!;
+    for (const name of ["financeentries", "recurringexpenses"]) {
+      await nativeDb.collection(name).updateMany({ $or: [{ cashbox: { $exists: false } }, { cashbox: "" }] }, { $set: { cashbox } });
+    }
+    // As metas antigas valiam para tudo: ficam como meta de "Todos os caixas".
+    await nativeDb.collection("monthlygoals").updateMany({ cashbox: { $exists: false } }, { $set: { cashbox: "" } });
+    await AppSettings.updateOne({ key: "main" }, { $addToSet: { migrations: key } });
+  }
+  // A meta passou a ser por caixa: troca o índice único (dono+mês) por (dono+mês+caixa).
+  const legacyIndex = "ownerId_1_month_1";
+  const indexes = await MonthlyGoal.collection.indexes().catch(() => []);
+  if (indexes.some((index) => index.name === legacyIndex)) {
+    await MonthlyGoal.collection.dropIndex(legacyIndex).catch(() => undefined);
+  }
+  await MonthlyGoal.createIndexes();
 }

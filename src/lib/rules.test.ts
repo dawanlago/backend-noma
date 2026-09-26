@@ -6,6 +6,7 @@ import { firstOpenStage, firstStageOfKind, normalizeStages, removedStageIds } fr
 import { contactFromAnswers, normalizeFormFields, validateAnswers } from "./forms";
 import { legacyLeadPatch } from "./leadMigration";
 import { npsGroup, npsScore } from "./nps";
+import { upcomingBirthdays } from "./birthdays";
 import { isOwnCloudinaryUrl, signParams } from "./cloudinary";
 import { legacyAnswers, legacyDealToLead, legacyFormFields, legacyStageKind, legacyTaskPatch, splitLegacyDate } from "./legacyMigration";
 
@@ -178,5 +179,25 @@ describe("migração da primeira versão", () => {
       ["aceite", "", "checkbox"],
     ]);
     expect(legacyAnswers([{ key: "nome", value: "Ana" }])).toEqual({ nome: "Ana" });
+  });
+});
+
+describe("aniversários", () => {
+  it("lista os próximos, vira o ano e trata 29/02", () => {
+    const people = [
+      { _id: 1, name: "Hoje", birthDate: "1990-09-27" },
+      { _id: 2, name: "Semana", birthDate: "1985-10-02" },
+      { _id: 3, name: "Longe", birthDate: "2000-12-25" },
+      { _id: 4, name: "Janeiro", birthDate: "1995-01-03" },
+      { _id: 5, name: "Bissexto", birthDate: "1992-02-29" },
+      { _id: 6, name: "Sem data", birthDate: "" },
+    ];
+    const list = upcomingBirthdays(people, "2026-09-27", 15);
+    expect(list.map((p) => [p.name, p.daysUntil, p.age])).toEqual([
+      ["Hoje", 0, 36],
+      ["Semana", 5, 41],
+    ]);
+    expect(upcomingBirthdays(people, "2026-12-30", 10).map((p) => [p.name, p.date])).toEqual([["Janeiro", "2027-01-03"]]);
+    expect(upcomingBirthdays(people, "2027-02-27", 3).map((p) => p.date)).toEqual(["2027-02-28"]);
   });
 });

@@ -10,8 +10,8 @@ import { recordScope, withOwnerNames } from "../lib/ownership";
 
 /* Base de dados: contatos (pessoas) e empresas, com perfil e históricos. */
 
-const CONTACT_TEXT = ["name", "email", "phone", "cpf", "birthDate", "photo", "niche", "jobRole", "instagram", "supplierCategory", "notes"] as const;
-const COMPANY_TEXT = ["name", "taxId", "logo", "niche", "email", "phone", "instagram", "website", "supplierCategory", "notes"] as const;
+const CONTACT_TEXT = ["name", "email", "phone", "cpf", "birthDate", "photo", "niche", "jobRole", "instagram", "supplierCategory", "pixKey", "notes"] as const;
+const COMPANY_TEXT = ["name", "taxId", "logo", "niche", "email", "phone", "instagram", "website", "supplierCategory", "pixKey", "notes"] as const;
 
 function stringList(value: unknown) {
   return Array.isArray(value) ? [...new Set(value.map(String).map((item) => item.trim()).filter(Boolean))] : [];

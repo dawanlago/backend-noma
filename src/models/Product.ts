@@ -3,6 +3,7 @@ import { Schema, models, model, type Document, type Model, type Types } from "mo
 export interface IProduct extends Document {
   _id: Types.ObjectId;
   name: string;
+  description: string;
   operationalCost: number;
   profit: number;
   createdAt: Date;
@@ -12,6 +13,7 @@ export interface IProduct extends Document {
 const ProductSchema = new Schema<IProduct>(
   {
     name: { type: String, required: true, trim: true },
+    description: { type: String, trim: true, default: "" },
     operationalCost: { type: Number, required: true, min: 0, default: 0 },
     profit: { type: Number, required: true, min: 0, default: 0 },
   },

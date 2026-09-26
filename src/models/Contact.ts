@@ -19,6 +19,8 @@ export interface IContact extends Document {
   /** Tipos de relação na base: client, lead, supplier, partner... */
   kinds: string[];
   supplierCategory: string;
+  /** Chave PIX para pagar o fornecedor/parceiro. */
+  pixKey: string;
   notes: string;
   custom: Record<string, unknown>;
   createdAt: Date;
@@ -40,6 +42,7 @@ const ContactSchema = new Schema<IContact>(
     affinity: { type: Number, min: 0, max: 5, default: 0 },
     kinds: { type: [String], default: [] },
     supplierCategory: { type: String, trim: true, default: "" },
+    pixKey: { type: String, trim: true, default: "" },
     notes: { type: String, default: "" },
     custom: { type: Schema.Types.Mixed, default: {} },
   },
