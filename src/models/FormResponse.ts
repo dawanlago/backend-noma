@@ -8,6 +8,8 @@ export interface IFormResponse extends Document {
   answers: Record<string, unknown>;
   contactId?: Types.ObjectId;
   leadId?: Types.ObjectId;
+  /** Preenchido pelo link enviado na negociação. */
+  inviteId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,6 +21,7 @@ const FormResponseSchema = new Schema<IFormResponse>(
     answers: { type: Schema.Types.Mixed, default: {} },
     contactId: { type: Schema.Types.ObjectId, ref: "Contact" },
     leadId: { type: Schema.Types.ObjectId, ref: "Lead" },
+    inviteId: { type: Schema.Types.ObjectId, ref: "FormInvite" },
   },
   { timestamps: true, minimize: false },
 );

@@ -7,6 +7,7 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 function publicSettings(doc: InstanceType<typeof AppSettings>) {
   const json = doc.toJSON() as unknown as Record<string, unknown>;
   delete json.seededLists;
+  delete json.migrations;
   return json;
 }
 

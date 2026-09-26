@@ -2,6 +2,7 @@ import AppSettings from "../models/AppSettings";
 import Funnel from "../models/Funnel";
 import Lead from "../models/Lead";
 import OptionItem from "../models/OptionItem";
+import User from "../models/User";
 import { LEGACY_LEAD_STAGES } from "../types";
 import { defaultItems, OPTION_LISTS } from "./optionLists";
 import { legacyLeadPatch } from "./leadMigration";
@@ -54,4 +55,18 @@ export async function seedFunnelAndMigrateLeads() {
       },
     })),
   );
+}
+
+/**
+ * Áreas novas (Agenda e NPS): quem já tinha a lista de acessos salva ganha a área
+ * equivalente uma única vez; depois disso o admin decide.
+ */
+export async function migrateNewModules() {
+  const key = "modules-agenda-nps";
+  const settings = await getSettings();
+  if (settings.migrations.includes(key)) return;
+  await User.updateMany({ permissions: "atividades" }, { $addToSet: { permissions: "agenda" } });
+  await User.updateMany({ permissions: "crm" }, { $addToSet: { permissions: "nps" } });
+  await User.updateMany({}, { $pull: { permissions: "biblioteca" } });
+  await AppSettings.updateOne({ key: "main" }, { $addToSet: { migrations: key } });
 }

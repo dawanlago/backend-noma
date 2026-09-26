@@ -21,6 +21,8 @@ export interface IAppSettings extends Document {
   };
   /** Listas de opções que já receberam os valores padrão (não recria o que foi apagado). */
   seededLists: string[];
+  /** Migrações de dados já aplicadas (rodam uma vez só). */
+  migrations: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,6 +63,7 @@ const AppSettingsSchema = new Schema<IAppSettings>(
       defaultColor: { type: String, default: DEFAULT_SETTINGS.brand.defaultColor },
     },
     seededLists: { type: [String], default: [] },
+    migrations: { type: [String], default: [] },
   },
   { timestamps: true },
 );

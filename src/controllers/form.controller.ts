@@ -1,11 +1,20 @@
 import type { NextFunction, Request, Response } from "express";
 import Company from "../models/Company";
 import Contact from "../models/Contact";
-import Form from "../models/Form";
+import Form, { type IForm } from "../models/Form";
+import FormInvite from "../models/FormInvite";
 import FormResponse from "../models/FormResponse";
 import Funnel from "../models/Funnel";
 import Lead from "../models/Lead";
-import { answersSummary, contactFromAnswers, newPublicId, normalizeFormFields, validateAnswers } from "../lib/forms";
+import {
+  answersSummary,
+  answerText,
+  contactFromAnswers,
+  newInviteCode,
+  newPublicId,
+  normalizeFormFields,
+  validateAnswers,
+} from "../lib/forms";
 import { firstOpenStage } from "../lib/funnels";
 import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
 
@@ -89,6 +98,7 @@ export async function deleteForm(req: Request, res: Response, next: NextFunction
     const form = await Form.findOneAndDelete({ _id: req.params.id, ...recordScope(req) });
     if (!form) return notFound(res);
     await FormResponse.deleteMany({ formId: form._id });
+    await FormInvite.deleteMany({ formId: form._id });
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -197,6 +207,175 @@ export async function submitPublicForm(req: Request, res: Response, next: NextFu
       }
     }
     await response.save();
+    res.status(201).json({ data: { message: form.successMessage } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* -------------------- Formulário enviado pela negociação -------------------- */
+
+async function uniqueInviteCode() {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const code = newInviteCode();
+    if (!(await FormInvite.exists({ code }))) return code;
+  }
+  throw new Error("Não foi possível gerar o código do formulário.");
+}
+
+/** GET /leads/:id/form-invites — formulários enviados nesta negociação, com as respostas. */
+export async function listLeadInvites(req: Request, res: Response, next: NextFunction) {
+  try {
+    const lead = await Lead.findOne({ _id: req.params.id, ...recordScope(req) }).select("_id").lean();
+    if (!lead) {
+      res.status(404).json({ error: "Negociação não encontrada." });
+      return;
+    }
+    const invites = await FormInvite.find({ leadId: lead._id }).sort({ createdAt: -1 }).lean();
+    const [forms, responses] = await Promise.all([
+      Form.find({ _id: { $in: invites.map((invite) => invite.formId) } }).select("name fields").lean(),
+      FormResponse.find({ _id: { $in: invites.flatMap((invite) => (invite.responseId ? [invite.responseId] : [])) } }).lean(),
+    ]);
+    res.json({
+      data: invites.map((invite) => {
+        const form = forms.find((item) => String(item._id) === String(invite.formId));
+        const response = responses.find((item) => String(item._id) === String(invite.responseId));
+        return {
+          ...invite,
+          formName: form?.name || "Formulário",
+          answers: response
+            ? (form?.fields || []).map((field) => ({ label: field.label, value: answerText(response.answers[field.key] as never) }))
+            : [],
+        };
+      }),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /leads/:id/form-invites { formId } — gera o código (ou reaproveita o pendente). */
+export async function createLeadInvite(req: Request, res: Response, next: NextFunction) {
+  try {
+    const lead = await Lead.findOne({ _id: req.params.id, ...recordScope(req) });
+    if (!lead) {
+      res.status(404).json({ error: "Negociação não encontrada." });
+      return;
+    }
+    const form = await Form.findOne({ _id: req.body.formId, isActive: true }).lean();
+    if (!form) {
+      res.status(404).json({ error: "Formulário não encontrado ou pausado." });
+      return;
+    }
+    let invite = await FormInvite.findOne({ leadId: lead._id, formId: form._id });
+    if (invite?.status === "submitted") {
+      res.status(400).json({ error: "Este formulário já foi preenchido nesta negociação." });
+      return;
+    }
+    if (invite) {
+      invite.sentAt = new Date();
+      await invite.save();
+    } else {
+      invite = await FormInvite.create({
+        code: await uniqueInviteCode(),
+        formId: form._id,
+        leadId: lead._id,
+        contactId: lead.contactId,
+        ownerId: req.user!._id,
+      });
+      lead.history.push({ at: new Date(), text: `Formulário "${form.name}" enviado (código ${invite.code})`, userName: req.user!.name });
+      await lead.save();
+    }
+    res.status(201).json({ data: { ...invite.toJSON(), formName: form.name, answers: [] } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Valores já conhecidos do contato para preencher o formulário. */
+function prefillFor(form: IForm, contact: { name?: string; email?: string; phone?: string; instagram?: string } | null, company: string) {
+  const values: Record<string, string> = {};
+  if (!contact) return values;
+  for (const field of form.fields) {
+    const value =
+      field.target === "name" ? contact.name
+      : field.target === "email" ? contact.email
+      : field.target === "phone" ? contact.phone
+      : field.target === "instagram" ? contact.instagram
+      : field.target === "company" ? company
+      : "";
+    if (value) values[field.key] = value;
+  }
+  return values;
+}
+
+export async function getInviteByCode(req: Request, res: Response, next: NextFunction) {
+  try {
+    const invite = await FormInvite.findOne({ code: req.params.code }).lean();
+    const form = invite ? await Form.findOne({ _id: invite.formId, isActive: true }) : null;
+    if (!invite || !form) return notFound(res);
+    const [contact, lead, response] = await Promise.all([
+      invite.contactId ? Contact.findById(invite.contactId).lean() : null,
+      Lead.findById(invite.leadId).select("company").lean(),
+      invite.responseId ? FormResponse.findById(invite.responseId).lean() : null,
+    ]);
+    res.json({
+      data: {
+        name: form.name,
+        description: form.description,
+        fields: form.fields,
+        successMessage: form.successMessage,
+        status: invite.status,
+        contactFirstName: (contact?.name || "").split(" ")[0] || "",
+        prefill: prefillFor(form, contact, lead?.company || ""),
+        answers: response
+          ? form.fields.map((field) => ({ label: field.label, value: answerText(response.answers[field.key] as never) }))
+          : [],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function submitInviteByCode(req: Request, res: Response, next: NextFunction) {
+  try {
+    const invite = await FormInvite.findOne({ code: req.params.code });
+    const form = invite ? await Form.findOne({ _id: invite.formId, isActive: true }) : null;
+    if (!invite || !form) return notFound(res);
+    if (invite.status === "submitted") {
+      res.status(409).json({ error: "Este formulário já foi preenchido." });
+      return;
+    }
+    const { answers, error } = validateAnswers(form.fields, req.body?.answers);
+    if (error) {
+      res.status(400).json({ error });
+      return;
+    }
+    const response = await FormResponse.create({
+      formId: form._id,
+      ownerId: form.ownerId,
+      answers,
+      contactId: invite.contactId,
+      leadId: invite.leadId,
+      inviteId: invite._id,
+    });
+    invite.status = "submitted";
+    invite.responseId = response._id;
+    invite.submittedAt = new Date();
+    await invite.save();
+
+    // Atualiza o contato com o que ele informou nos campos ligados ao cadastro.
+    const info = contactFromAnswers(form.fields, answers);
+    if (invite.contactId) {
+      const update: Record<string, string> = {};
+      for (const key of ["name", "email", "phone", "instagram"] as const) if (info[key]) update[key] = info[key];
+      if (Object.keys(update).length) await Contact.updateOne({ _id: invite.contactId }, { $set: update });
+    }
+    await Lead.updateOne(
+      { _id: invite.leadId },
+      { $push: { history: { at: new Date(), text: `Formulário "${form.name}" preenchido pelo cliente`, userName: "Cliente" } } },
+    );
     res.status(201).json({ data: { message: form.successMessage } });
   } catch (error) {
     next(error);

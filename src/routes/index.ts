@@ -27,7 +27,6 @@ import {
   listToolDocuments,
   updateToolDocument,
 } from "../controllers/tool.controller";
-import { listLibrary, updateLibraryCategory } from "../controllers/library.controller";
 import { readSettings, updateSettings } from "../controllers/settings.controller";
 import { createOption, deleteOption, listOptions, reorderOptions, updateOption } from "../controllers/option.controller";
 import {
@@ -54,9 +53,11 @@ import {
   createNote,
   deleteGroup,
   deleteNote,
-  getBoard,
+  listGroups,
+  listNotes,
   moveNote,
-  reorderGroups,
+  shareNote,
+  unshareNote,
   updateGroup,
   updateNote,
 } from "../controllers/note.controller";
@@ -65,8 +66,12 @@ import {
   deleteForm,
   deleteResponse,
   getForm,
+  createLeadInvite,
+  getInviteByCode,
   getPublicForm,
   listForms,
+  listLeadInvites,
+  submitInviteByCode,
   listResponses,
   submitPublicForm,
   updateForm,
@@ -100,6 +105,17 @@ import {
   updateCompany,
   updateContact,
 } from "../controllers/base.controller";
+import {
+  createInvite as createNpsInvite,
+  createSurvey,
+  deleteRating,
+  deleteSurvey,
+  getPublicInvite,
+  listRatings,
+  listSurveys,
+  respondPublicInvite,
+  updateSurvey,
+} from "../controllers/nps.controller";
 import { requireAdmin, requireAuth, requireModule } from "../middlewares/auth";
 
 const router = Router();
@@ -111,6 +127,10 @@ router.get("/auth/me", requireAuth, me);
 // Formulários públicos (link enviado ao cliente), sem login.
 router.get("/public/forms/:publicId", getPublicForm);
 router.post("/public/forms/:publicId/responses", submitPublicForm);
+router.get("/public/form-invites/:code", getInviteByCode);
+router.post("/public/form-invites/:code", submitInviteByCode);
+router.get("/public/nps/:token", getPublicInvite);
+router.post("/public/nps/:token", respondPublicInvite);
 
 router.use(requireAuth);
 
@@ -179,6 +199,8 @@ router.patch("/leads/:id", crmAccess, updateLead);
 router.delete("/leads/:id", crmAccess, deleteLead);
 router.post("/leads/:id/status", crmAccess, setLeadStatus);
 router.post("/leads/:id/comments", crmAccess, addComment);
+router.get("/leads/:id/form-invites", crmAccess, listLeadInvites);
+router.post("/leads/:id/form-invites", crmAccess, createLeadInvite);
 router.patch("/leads/:id/comments/:commentId", requireAdmin, updateComment);
 router.delete("/leads/:id/comments/:commentId", requireAdmin, deleteComment);
 
@@ -188,24 +210,36 @@ router.patch("/tasks/:id", updateTask);
 router.delete("/tasks/:id", deleteTask);
 
 const notesAccess = requireModule("anotacoes");
-router.get("/notes/board", notesAccess, getBoard);
+router.get("/notes", notesAccess, listNotes);
 router.post("/notes", notesAccess, createNote);
-router.put("/notes/move", notesAccess, moveNote);
 router.patch("/notes/:id", notesAccess, updateNote);
 router.delete("/notes/:id", notesAccess, deleteNote);
+router.put("/notes/:id/group", notesAccess, moveNote);
+router.post("/notes/:id/share", notesAccess, shareNote);
+router.delete("/notes/:id/share/:userId", notesAccess, unshareNote);
+router.get("/note-groups", notesAccess, listGroups);
 router.post("/note-groups", notesAccess, createGroup);
-router.put("/note-groups/reorder", notesAccess, reorderGroups);
 router.patch("/note-groups/:id", notesAccess, updateGroup);
 router.delete("/note-groups/:id", notesAccess, deleteGroup);
 
 const formsAccess = requireModule("formularios");
-router.get("/forms", formsAccess, listForms);
+// A lista também serve para escolher o formulário a enviar na negociação.
+router.get("/forms", requireModule("formularios", "crm"), listForms);
 router.post("/forms", formsAccess, createForm);
 router.get("/forms/:id", formsAccess, getForm);
 router.patch("/forms/:id", formsAccess, updateForm);
 router.delete("/forms/:id", formsAccess, deleteForm);
 router.get("/forms/:id/responses", formsAccess, listResponses);
 router.delete("/forms/:id/responses/:responseId", formsAccess, deleteResponse);
+
+const npsAccess = requireModule("nps");
+router.get("/nps/surveys", requireModule("nps", "crm", "base"), listSurveys);
+router.post("/nps/surveys", npsAccess, createSurvey);
+router.patch("/nps/surveys/:id", npsAccess, updateSurvey);
+router.delete("/nps/surveys/:id", npsAccess, deleteSurvey);
+router.post("/nps/invites", requireModule("nps", "crm", "base"), createNpsInvite);
+router.get("/nps/ratings", requireModule("nps", "crm", "base"), listRatings);
+router.delete("/nps/ratings/:id", npsAccess, deleteRating);
 
 const financeAccess = requireModule("financeiro");
 router.get("/finance/entries", financeAccess, listEntries);
@@ -236,7 +270,5 @@ router.get("/files/:id/chunks/:n", contractsAccess, getChunk);
 router.patch("/files/:id", contractsAccess, updateFile);
 router.delete("/files/:id", contractsAccess, deleteFile);
 
-router.get("/library", requireModule("biblioteca"), listLibrary);
-router.patch("/library/:id", requireAdmin, updateLibraryCategory);
 
 export default router;

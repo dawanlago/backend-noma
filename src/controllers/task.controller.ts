@@ -8,7 +8,12 @@ function applyBody(task: ITask, body: Record<string, unknown>) {
   if (typeof body.title === "string") task.title = body.title.trim();
   if (typeof body.notes === "string") task.notes = body.notes;
   if (typeof body.dueDate === "string") task.dueDate = body.dueDate.slice(0, 10);
-  if (typeof body.done === "boolean") task.done = body.done;
+  if (typeof body.time === "string") task.time = body.time.slice(0, 5);
+  if (typeof body.status === "string" && ["todo", "doing", "done"].includes(body.status)) {
+    task.status = body.status as ITask["status"];
+  } else if (typeof body.done === "boolean") {
+    task.done = body.done;
+  }
   if (body.leadId !== undefined) {
     task.leadId = typeof body.leadId === "string" && isValidObjectId(body.leadId) ? (body.leadId as never) : undefined;
   }
@@ -22,7 +27,7 @@ async function withLeadNames<T extends { leadId?: unknown }>(tasks: T[]) {
   return tasks.map((task) => ({ ...task, leadName: task.leadId ? names.get(String(task.leadId)) || "" : "" }));
 }
 
-/** GET /tasks?leadId=&status=pending|done */
+/** GET /tasks?leadId=&status=pending|done&from=YYYY-MM-DD&to=YYYY-MM-DD */
 export async function listTasks(req: Request, res: Response, next: NextFunction) {
   try {
     const filter: Record<string, unknown> = { ...ownerScope(req) };
@@ -38,9 +43,16 @@ export async function listTasks(req: Request, res: Response, next: NextFunction)
     }
     if (req.query.status === "pending") filter.done = false;
     if (req.query.status === "done") filter.done = true;
+    const from = typeof req.query.from === "string" ? req.query.from : "";
+    const to = typeof req.query.to === "string" ? req.query.to : "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) filter.dueDate = { $gte: from, $lte: to };
     const docs = await Task.find(filter).sort({ done: 1, dueDate: 1, createdAt: 1 }).lean();
     // Sem data vai para o fim da lista de pendentes.
-    docs.sort((a, b) => Number(a.done) - Number(b.done) || (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
+    docs.sort(
+      (a, b) =>
+        Number(a.done) - Number(b.done) ||
+        `${a.dueDate || "9999"} ${a.time || "99:99"}`.localeCompare(`${b.dueDate || "9999"} ${b.time || "99:99"}`),
+    );
     res.json({ data: await withOwnerNames(await withLeadNames(docs)) });
   } catch (error) {
     next(error);

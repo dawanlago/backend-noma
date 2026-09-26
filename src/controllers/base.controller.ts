@@ -4,6 +4,7 @@ import Company, { type ICompany } from "../models/Company";
 import Contact, { type IContact } from "../models/Contact";
 import FinanceEntry from "../models/FinanceEntry";
 import Lead from "../models/Lead";
+import NPSRating from "../models/NPSRating";
 import StoredFile from "../models/StoredFile";
 import { recordScope, withOwnerNames } from "../lib/ownership";
 
@@ -191,10 +192,11 @@ export async function deleteCompany(req: Request, res: Response, next: NextFunct
 
 async function history(req: Request, leadFilter: Record<string, unknown>, entryFilter: Record<string, unknown>, fileFilter: Record<string, unknown>) {
   const scope = recordScope(req);
-  const [leads, entries, files] = await Promise.all([
+  const [leads, entries, files, nps] = await Promise.all([
     Lead.find({ ...leadFilter, ...scope }).select("-history").sort({ updatedAt: -1 }).lean(),
     FinanceEntry.find({ ...entryFilter, ...scope }).sort({ date: -1 }).lean(),
     StoredFile.find({ ...fileFilter, ...scope, complete: true }).sort({ createdAt: -1 }).lean(),
+    NPSRating.find(fileFilter).sort({ date: -1 }).select("rating comment date contactId").lean(),
   ]);
   const comments = leads
     .flatMap((lead) =>
@@ -209,6 +211,7 @@ async function history(req: Request, leadFilter: Record<string, unknown>, entryF
     comments,
     entries,
     files,
+    nps,
     totals: {
       wonCount: won.length,
       wonValue: won.reduce((total, lead) => total + (lead.value || 0), 0),

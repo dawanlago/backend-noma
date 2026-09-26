@@ -1,7 +1,12 @@
-import { randomBytes } from "crypto";
+import { randomBytes, randomInt } from "crypto";
 import { FORM_FIELD_TARGETS, FORM_FIELD_TYPES, type FormFieldTarget, type FormFieldType } from "../types";
 import type { IFormField } from "../models/Form";
 import { slugify, uniqueValue } from "./optionLists";
+
+/** Código de 6 dígitos dos formulários enviados pela negociação. */
+export function newInviteCode() {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
 
 export function newPublicId() {
   return randomBytes(6).toString("base64url");

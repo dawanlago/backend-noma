@@ -1,6 +1,6 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
 
-/** Coluna do quadro de anotações. */
+/** Grupo (pasta) de anotações de um usuário. */
 export interface INoteGroup extends Document {
   _id: Types.ObjectId;
   ownerId: Types.ObjectId;

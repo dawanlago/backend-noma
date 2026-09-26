@@ -5,6 +5,7 @@ import { defaultItems, isValidList, KEYED_LISTS, slugify, uniqueValue } from "./
 import { firstOpenStage, firstStageOfKind, normalizeStages, removedStageIds } from "./funnels";
 import { contactFromAnswers, normalizeFormFields, validateAnswers } from "./forms";
 import { legacyLeadPatch } from "./leadMigration";
+import { npsGroup, npsScore } from "./nps";
 
 describe("permissões", () => {
   it("admin sempre tem todos os módulos, mesmo com lista salva", () => {
@@ -96,5 +97,13 @@ describe("migração dos leads antigos", () => {
     const patch = legacyLeadPatch({ stage: "won", value: 1500 }, funnelId, stages);
     expect(patch).toMatchObject({ funnelId, stageId: stages[1]._id, status: "won", customValue: 1500, value: 1500 });
     expect(legacyLeadPatch({ stage: "sumiu" }, funnelId, stages).stageId).toBe(stages[0]._id);
+  });
+});
+
+describe("NPS", () => {
+  it("classifica e calcula a nota (% promotores − % detratores)", () => {
+    expect([10, 9, 8, 7, 6, 0].map(npsGroup)).toEqual(["promoter", "promoter", "passive", "passive", "detractor", "detractor"]);
+    expect(npsScore([10, 9, 8, 3])).toBe(25);
+    expect(npsScore([])).toBe(0);
   });
 });
