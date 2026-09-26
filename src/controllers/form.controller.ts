@@ -19,10 +19,14 @@ import { firstOpenStage } from "../lib/funnels";
 import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
 import { getSettings } from "../lib/seedDefaults";
 
-/** Identidade da produtora mostrada no topo dos formulários públicos. */
-async function publicBrand() {
+/** Identidade mostrada no topo do formulário público: a do próprio formulário ou a da produtora. */
+async function publicBrand(form?: { logo?: string; accentColor?: string }) {
   const settings = await getSettings();
-  return { logo: settings.brand?.logo || "", companyName: settings.companyName || "Noma", color: settings.brand?.defaultColor || "" };
+  return {
+    logo: form?.logo || settings.brand?.logo || "",
+    companyName: settings.companyName || "Noma",
+    color: form?.accentColor || settings.brand?.defaultColor || "",
+  };
 }
 
 function notFound(res: Response) {
@@ -33,6 +37,8 @@ function applyBody(form: InstanceType<typeof Form>, body: Record<string, unknown
   if (typeof body.name === "string" && body.name.trim()) form.name = body.name.trim();
   if (typeof body.description === "string") form.description = body.description;
   if (typeof body.successMessage === "string") form.successMessage = body.successMessage;
+  if (typeof body.logo === "string") form.logo = body.logo.trim();
+  if (typeof body.accentColor === "string") form.accentColor = /^#[0-9a-fA-F]{6}$/.test(body.accentColor.trim()) ? body.accentColor.trim() : "";
   if (typeof body.isActive === "boolean") form.isActive = body.isActive;
   if (typeof body.createLead === "boolean") form.createLead = body.createLead;
   if (body.fields !== undefined) form.set("fields", normalizeFormFields(body.fields));
@@ -146,7 +152,7 @@ export async function getPublicForm(req: Request, res: Response, next: NextFunct
         description: form.description,
         fields: form.fields,
         successMessage: form.successMessage,
-        brand: await publicBrand(),
+        brand: await publicBrand(form),
       },
     });
   } catch (error) {
@@ -334,7 +340,7 @@ export async function getInviteByCode(req: Request, res: Response, next: NextFun
         fields: form.fields,
         successMessage: form.successMessage,
         status: invite.status,
-        brand: await publicBrand(),
+        brand: await publicBrand(form),
         contactFirstName: (contact?.name || "").split(" ")[0] || "",
         prefill: prefillFor(form, contact, lead?.company || ""),
         answers: response

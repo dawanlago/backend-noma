@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { isValidObjectId } from "mongoose";
 import Company from "../models/Company";
+import BucketMovement from "../models/BucketMovement";
 import Contact from "../models/Contact";
 import FinanceEntry, { type IFinanceEntry } from "../models/FinanceEntry";
 import MonthlyGoal from "../models/MonthlyGoal";
@@ -108,7 +109,12 @@ export async function listEntries(req: Request, res: Response, next: NextFunctio
       .sort({ date: -1, createdAt: -1 })
       .lean();
     const goal = await MonthlyGoal.findOne({ ownerId: goalOwner(req), month, cashbox: String(box.cashbox || "") }).lean();
-    res.json({ data: await withOwnerNames(entries), meta: { month, goal: goal?.value || 0 } });
+    // Entradas que já foram distribuídas nas caixas de distribuição.
+    const distributed = new Set(
+      (await BucketMovement.distinct("entryId", { entryId: { $in: entries.map((entry) => entry._id) } })).map(String),
+    );
+    const data = entries.map((entry) => ({ ...entry, distributed: distributed.has(String(entry._id)) }));
+    res.json({ data: await withOwnerNames(data), meta: { month, goal: goal?.value || 0 } });
   } catch (error) {
     next(error);
   }

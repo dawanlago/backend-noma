@@ -22,6 +22,9 @@ export interface IForm extends Document {
   isActive: boolean;
   fields: IFormField[];
   successMessage: string;
+  /** Aparência própria do link (vazio = identidade de Configurações → Geral). */
+  logo: string;
+  accentColor: string;
   createLead: boolean;
   funnelId?: Types.ObjectId;
   stageId?: Types.ObjectId;
@@ -51,6 +54,8 @@ const FormSchema = new Schema<IForm>(
     isActive: { type: Boolean, default: true },
     fields: { type: [FormFieldSchema], default: [] },
     successMessage: { type: String, trim: true, default: "Recebemos suas respostas. Obrigado!" },
+    logo: { type: String, trim: true, default: "" },
+    accentColor: { type: String, trim: true, default: "", match: /^(#[0-9a-fA-F]{6})?$/ },
     createLead: { type: Boolean, default: true },
     funnelId: { type: Schema.Types.ObjectId, ref: "Funnel" },
     stageId: { type: Schema.Types.ObjectId },

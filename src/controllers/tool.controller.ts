@@ -3,6 +3,7 @@ import ToolDocument from "../models/ToolDocument";
 import { hasModule } from "../lib/permissions";
 import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
 import { TOOL_MODULES, type ToolKey } from "../types";
+import { removeProposalShare, shareSummaries } from "./proposalLink.controller";
 
 const TOOLS: ToolKey[] = ["proposal", "contract", "budget", "briefing"];
 
@@ -28,7 +29,14 @@ export async function listToolDocuments(req: Request, res: Response, next: NextF
       .select("-data")
       .sort({ updatedAt: -1 })
       .lean();
-    res.json({ data: await withOwnerNames(docs) });
+    const withNames = await withOwnerNames(docs);
+    if (tool !== "proposal") {
+      res.json({ data: withNames });
+      return;
+    }
+    // Propostas levam o resumo do link público (selo "Visto há…").
+    const shares = await shareSummaries(docs.map((doc) => doc._id));
+    res.json({ data: withNames.map((doc) => ({ ...doc, share: shares.get(String(doc._id)) || null })) });
   } catch (error) {
     next(error);
   }
@@ -117,6 +125,7 @@ export async function deleteToolDocument(req: Request, res: Response, next: Next
       res.status(404).json({ error: "Documento não encontrado." });
       return;
     }
+    if (tool === "proposal") await removeProposalShare(doc._id);
     res.status(204).send();
   } catch (error) {
     next(error);

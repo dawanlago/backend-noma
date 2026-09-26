@@ -14,8 +14,12 @@ function firstName(name?: string) {
 }
 
 function applySurvey(doc: INPSSurvey, body: Record<string, unknown>) {
-  for (const key of ["name", "question", "commentPrompt", "thankYouMessage"] as const) {
+  for (const key of ["name", "question", "commentPrompt", "thankYouMessage", "messageTemplate", "logo"] as const) {
     if (typeof body[key] === "string") doc[key] = (body[key] as string).trim();
+  }
+  if (typeof body.accentColor === "string") {
+    const color = body.accentColor.trim();
+    doc.accentColor = /^#[0-9a-fA-F]{6}$/.test(color) ? color : "";
   }
   if (typeof body.isActive === "boolean") doc.isActive = body.isActive;
 }
@@ -169,6 +173,8 @@ export async function getPublicInvite(req: Request, res: Response, next: NextFun
           question: survey.question,
           commentPrompt: survey.commentPrompt,
           thankYouMessage: survey.thankYouMessage,
+          logo: survey.logo || "",
+          accentColor: survey.accentColor || "",
         },
       },
     });

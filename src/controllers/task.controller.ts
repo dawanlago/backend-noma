@@ -8,6 +8,7 @@ import { removeEvent, syncTask } from "../lib/googleCalendar";
 function applyBody(task: ITask, body: Record<string, unknown>) {
   if (typeof body.title === "string") task.title = body.title.trim();
   if (typeof body.notes === "string") task.notes = body.notes;
+  if (typeof body.type === "string") task.type = body.type.trim();
   if (typeof body.dueDate === "string") task.dueDate = body.dueDate.slice(0, 10);
   if (typeof body.time === "string") task.time = body.time.slice(0, 5);
   if (body.duration !== undefined) task.duration = Math.min(1440, Math.max(5, Math.round(Number(body.duration) || 60)));
@@ -82,8 +83,11 @@ export async function updateTask(req: Request, res: Response, next: NextFunction
       return;
     }
     applyBody(task, req.body);
+    const completed = task.isModified("done") || task.isModified("status");
     await task.save();
     await syncTask(task);
+    // Atividade concluída numa negociação conta como último contato.
+    if (completed && task.done && task.leadId) await Lead.updateOne({ _id: task.leadId }, { $set: { lastContactAt: new Date() } }, { timestamps: false });
     const [data] = await withLeadNames([task.toJSON()]);
     res.json({ data });
   } catch (error) {

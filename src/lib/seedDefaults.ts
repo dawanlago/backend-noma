@@ -238,3 +238,49 @@ export async function migrateFinanceCashbox() {
   }
   await MonthlyGoal.createIndexes();
 }
+
+/** Negociações antigas: estima quando entraram na etapa atual pelo histórico (senão, pela criação). */
+export async function migrateLeadStageDates() {
+  const key = "lead-stage-dates-v1";
+  const settings = await getSettings();
+  if (settings.migrations.includes(key)) return;
+  const leads = await Lead.find({ stageEnteredAt: { $exists: false } }).select("history createdAt").lean();
+  const moves = /^(Movida para|Negociação criada|Venda feita|Negociação perdida|Negociação reaberta)/;
+  if (leads.length) {
+    await Lead.bulkWrite(
+      leads.map((lead) => {
+        const last = [...(lead.history || [])].reverse().find((item) => moves.test(item.text));
+        return {
+          updateOne: {
+            filter: { _id: lead._id },
+            update: { $set: { stageEnteredAt: last?.at || lead.createdAt, funnelEnteredAt: lead.createdAt } },
+            timestamps: false,
+          },
+        };
+      }),
+    );
+  }
+  await AppSettings.updateOne({ key: "main" }, { $addToSet: { migrations: key } });
+}
+
+/** Último contato das negociações antigas: o parecer mais recente ou a atividade concluída mais recente. */
+export async function migrateLeadLastContact() {
+  const key = "lead-last-contact-v1";
+  const settings = await getSettings();
+  if (settings.migrations.includes(key)) return;
+  const leads = await Lead.find({ lastContactAt: { $exists: false } }).select("comments.createdAt").lean();
+  const done = await Task.aggregate<{ _id: unknown; at: Date }>([
+    { $match: { done: true, leadId: { $exists: true }, doneAt: { $exists: true } } },
+    { $group: { _id: "$leadId", at: { $max: "$doneAt" } } },
+  ]);
+  const doneAt = new Map(done.map((item) => [String(item._id), new Date(item.at).getTime()]));
+  const updates = leads
+    .map((lead) => {
+      const times = [...(lead.comments || []).map((comment) => new Date(comment.createdAt).getTime()), doneAt.get(String(lead._id)) || 0];
+      const latest = Math.max(0, ...times.filter((time) => !Number.isNaN(time)));
+      return latest ? { updateOne: { filter: { _id: lead._id }, update: { $set: { lastContactAt: new Date(latest) } }, timestamps: false } } : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  if (updates.length) await Lead.bulkWrite(updates);
+  await AppSettings.updateOne({ key: "main" }, { $addToSet: { migrations: key } });
+}

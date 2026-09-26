@@ -42,6 +42,10 @@ function applyBody(lead: ILead, body: Record<string, unknown>) {
     lead.temperature = body.temperature as ILead["temperature"];
   }
   if (body.customValue !== undefined) lead.customValue = Math.max(0, Number(body.customValue) || 0);
+  for (const key of ["offeredValue", "closedValue"] as const) {
+    if (body[key] === undefined) continue;
+    lead[key] = body[key] === null || body[key] === "" ? undefined : Math.round(Math.max(0, Number(body[key]) || 0) * 100) / 100;
+  }
   if (Array.isArray(body.products)) {
     lead.products = body.products
       .map((item) => item as Record<string, unknown>)
@@ -83,7 +87,21 @@ function moveTo(lead: ILead, funnel: IFunnel, stageId: Types.ObjectId, userName:
   lead.funnelId = funnel._id;
   lead.stageId = stage._id;
   lead.status = stage.kind;
-  if (changed) lead.history.push({ at: new Date(), text: `Movida para "${stage.name}" (${funnel.name})`, userName });
+  if (changed) {
+    // Ao trocar de etapa, entra na primeira microetapa dela (se houver).
+    lead.subStageId = stage.subStages?.[0]?._id;
+    lead.history.push({ at: new Date(), text: `Movida para "${stage.name}" (${funnel.name})`, userName });
+  }
+}
+
+/** Troca a microetapa dentro da etapa atual ("" = nenhuma). */
+function moveToSubStage(lead: ILead, funnel: IFunnel, subStageId: unknown, userName: string) {
+  const stage = stageOf(funnel, lead.stageId);
+  if (!stage) return;
+  const sub = stage.subStages?.find((item) => String(item._id) === String(subStageId));
+  if (String(lead.subStageId || "") === String(sub?._id || "")) return;
+  lead.subStageId = sub?._id;
+  lead.history.push({ at: new Date(), text: sub ? `Microetapa "${sub.name}" (${stage.name})` : `Saiu da microetapa (${stage.name})`, userName });
 }
 
 async function respond(res: Response, lead: ILead, status = 200) {
@@ -136,6 +154,7 @@ export async function createLead(req: Request, res: Response, next: NextFunction
     const stage = stageOf(funnel, req.body.stageId) || firstOpenStage(funnel.stages)!;
     lead.stageId = stage._id;
     lead.status = stage.kind;
+    lead.subStageId = stage.subStages?.find((sub: { _id: Types.ObjectId }) => String(sub._id) === String(req.body.subStageId))?._id || stage.subStages?.[0]?._id;
     lead.history.push({ at: new Date(), text: `Negociação criada em "${stage.name}" (${funnel.name})`, userName: req.user!.name });
     await lead.save();
     await respond(res, lead, 201);
@@ -160,6 +179,10 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
       }
       const stage = stageOf(funnel, req.body.stageId) || firstOpenStage(funnel.stages);
       if (stage) moveTo(lead, funnel, stage._id, req.user!.name);
+      if (req.body.subStageId !== undefined) moveToSubStage(lead, funnel, req.body.subStageId, req.user!.name);
+    } else if (req.body.subStageId !== undefined) {
+      const funnel = await Funnel.findById(lead.funnelId);
+      if (funnel) moveToSubStage(lead, funnel, req.body.subStageId, req.user!.name);
     }
     await lead.save();
     await respond(res, lead);
@@ -198,6 +221,7 @@ export async function setLeadStatus(req: Request, res: Response, next: NextFunct
     const funnel = await Funnel.findById(lead.funnelId);
     const stage = funnel ? (status === "open" ? firstOpenStage(funnel.stages) : firstStageOfKind(funnel.stages, status)) : undefined;
     if (stage && funnel) {
+      if (String(lead.stageId) !== String(stage._id)) lead.subStageId = stage.subStages?.[0]?._id;
       lead.stageId = stage._id;
       lead.history.push({ at: new Date(), text: `${STATUS_TEXT[status]} — etapa "${stage.name}"`, userName: req.user!.name });
     } else {
@@ -221,6 +245,7 @@ export async function addComment(req: Request, res: Response, next: NextFunction
     const lead = await Lead.findOne({ _id: req.params.id, ...recordScope(req) });
     if (!lead) return notFound(res);
     lead.comments.push({ text, authorId: req.user!._id, authorName: req.user!.name, createdAt: new Date() });
+    lead.lastContactAt = new Date();
     await lead.save();
     await respond(res, lead, 201);
   } catch (error) {

@@ -10,6 +10,8 @@ export interface ITask extends Document {
   _id: Types.ObjectId;
   ownerId: Types.ObjectId;
   title: string;
+  /** Tipo (lista de opções `taskType`: reunião, ligação, e-mail, follow-up ou personalizado). */
+  type: string;
   /** YYYY-MM-DD (opcional). */
   dueDate: string;
   /** HH:MM (opcional; compromissos da agenda). */
@@ -31,6 +33,7 @@ const TaskSchema = new Schema<ITask>(
   {
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     title: { type: String, required: true, trim: true },
+    type: { type: String, trim: true, default: "" },
     dueDate: { type: String, trim: true, default: "", match: /^(\d{4}-\d{2}-\d{2})?$/ },
     time: { type: String, trim: true, default: "", match: /^(\d{2}:\d{2})?$/ },
     status: { type: String, enum: ["todo", "doing", "done"], default: "todo" },

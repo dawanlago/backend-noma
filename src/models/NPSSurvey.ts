@@ -7,6 +7,11 @@ export interface INPSSurvey extends Document {
   question: string;
   commentPrompt: string;
   thankYouMessage: string;
+  /** Mensagem enviada ao cliente; aceita {nome}, {link} e {pesquisa}. */
+  messageTemplate: string;
+  /** Aparência da página de resposta: logo (URL) e cor de destaque (#RRGGBB). */
+  logo: string;
+  accentColor: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -18,6 +23,9 @@ const NPSSurveySchema = new Schema<INPSSurvey>(
     question: { type: String, required: true, trim: true },
     commentPrompt: { type: String, trim: true, default: "" },
     thankYouMessage: { type: String, trim: true, default: "Obrigado pela sua resposta." },
+    messageTemplate: { type: String, trim: true, default: "" },
+    logo: { type: String, trim: true, default: "" },
+    accentColor: { type: String, trim: true, default: "", match: /^(#[0-9a-fA-F]{6})?$/ },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true },

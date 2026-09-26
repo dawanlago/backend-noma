@@ -6,6 +6,7 @@ import FinanceEntry from "../models/FinanceEntry";
 import Lead from "../models/Lead";
 import NPSRating from "../models/NPSRating";
 import StoredFile from "../models/StoredFile";
+import Task from "../models/Task";
 import { recordScope, withOwnerNames } from "../lib/ownership";
 import { phoneKey } from "../lib/phone";
 
@@ -223,6 +224,20 @@ async function history(req: Request, leadFilter: Record<string, unknown>, entryF
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const won = leads.filter((lead) => lead.status === "won");
   const open = leads.filter((lead) => lead.status === "open");
+  // Última interação: parecer, atividade concluída, negociação mexida, arquivo ou NPS.
+  const doneTasks = leads.length
+    ? await Task.find({ leadId: { $in: leads.map((lead) => lead._id) }, done: true }).select("doneAt").sort({ doneAt: -1 }).limit(1).lean()
+    : [];
+  const times = (dates: (Date | string | undefined)[]) =>
+    dates.map((date) => (date ? new Date(date).getTime() : NaN)).filter((time) => !Number.isNaN(time));
+  const interactions = times([
+    ...comments.map((comment) => comment.createdAt),
+    ...leads.map((lead) => lead.updatedAt),
+    ...doneTasks.map((task) => task.doneAt),
+    ...files.map((file) => file.createdAt),
+    ...nps.map((rating) => rating.date),
+  ]);
+  const firstLead = times(leads.map((lead) => lead.createdAt));
   const received = entries.filter((entry) => entry.type === "income" && entry.status === "received");
   return {
     leads: await withOwnerNames(leads.map(({ comments: list, ...lead }) => ({ ...lead, commentsCount: list?.length || 0 }))),
@@ -230,6 +245,10 @@ async function history(req: Request, leadFilter: Record<string, unknown>, entryF
     entries,
     files,
     nps,
+    system: {
+      firstLeadAt: firstLead.length ? new Date(Math.min(...firstLead)) : null,
+      lastInteractionAt: interactions.length ? new Date(Math.max(...interactions)) : null,
+    },
     totals: {
       wonCount: won.length,
       wonValue: won.reduce((total, lead) => total + (lead.value || 0), 0),

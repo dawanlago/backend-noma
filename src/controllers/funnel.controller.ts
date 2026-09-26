@@ -29,6 +29,21 @@ export async function createFunnel(req: Request, res: Response, next: NextFuncti
   }
 }
 
+/** PUT /funnels/reorder { ids } — ordem dos funis no seletor do CRM. */
+export async function reorderFunnels(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { ids } = req.body as { ids?: unknown };
+    if (!Array.isArray(ids)) {
+      res.status(400).json({ error: "Ordem inválida." });
+      return;
+    }
+    await Funnel.bulkWrite(ids.map((id, order) => ({ updateOne: { filter: { _id: String(id) }, update: { $set: { order } } } })));
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+}
+
 /** Ao remover etapas, as negociações delas vão para a primeira etapa em andamento. */
 export async function updateFunnel(req: Request, res: Response, next: NextFunction) {
   try {
@@ -40,7 +55,12 @@ export async function updateFunnel(req: Request, res: Response, next: NextFuncti
     if (typeof req.body.name === "string" && req.body.name.trim()) doc.name = req.body.name.trim();
     if (typeof req.body.order === "number") doc.order = req.body.order;
     if (req.body.stages !== undefined) {
-      const previous = doc.stages.map((stage) => ({ _id: stage._id, kind: stage.kind, key: stage.key }));
+      const previous = doc.stages.map((stage) => ({
+        _id: stage._id,
+        kind: stage.kind,
+        key: stage.key,
+        subStages: (stage.subStages || []).map((sub) => ({ _id: sub._id })),
+      }));
       const stages = normalizeStages(req.body.stages, previous);
       if (!stages.length) {
         res.status(400).json({ error: "O funil precisa de pelo menos uma etapa." });
@@ -53,10 +73,16 @@ export async function updateFunnel(req: Request, res: Response, next: NextFuncti
       if (removed.length) {
         await Lead.updateMany(
           { funnelId: doc._id, stageId: { $in: removed } },
-          { $set: { stageId: target._id, status: target.kind } },
+          { $set: { stageId: target._id, status: target.kind, stageEnteredAt: new Date() } },
         );
         await Form.updateMany({ funnelId: doc._id, stageId: { $in: removed } }, { $set: { stageId: target._id } });
       }
+      // Microetapas removidas: as negociações ficam só na etapa.
+      const subIds = stages.flatMap((stage) => stage.subStages.map((sub) => sub._id));
+      await Lead.updateMany(
+        { funnelId: doc._id, subStageId: { $exists: true, $nin: subIds } },
+        { $unset: { subStageId: 1 }, $set: { subStageEnteredAt: new Date() } },
+      );
       // Etapas que mudaram de tipo (ex.: virou "venda feita") atualizam o status das negociações.
       await Promise.all(
         stages.map((stage) =>

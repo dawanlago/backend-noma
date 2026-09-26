@@ -36,7 +36,7 @@ import {
   listCustomFields,
   updateCustomField,
 } from "../controllers/customField.controller";
-import { createFunnel, deleteFunnel, listFunnels, updateFunnel } from "../controllers/funnel.controller";
+import { createFunnel, deleteFunnel, listFunnels, reorderFunnels, updateFunnel } from "../controllers/funnel.controller";
 import {
   addComment,
   createLead,
@@ -111,6 +111,22 @@ import {
   respondPublicInvite,
   updateSurvey,
 } from "../controllers/nps.controller";
+import {
+  beaconBody,
+  createProposalShare,
+  disableProposalShare,
+  getProposalShare,
+  getPublicProposal,
+  heartbeatProposalView,
+  startProposalView,
+} from "../controllers/proposalLink.controller";
+import {
+  createDistribution,
+  createWithdrawal,
+  deleteMovement,
+  getDistribution,
+  saveBuckets,
+} from "../controllers/distribution.controller";
 import { requireAdmin, requireAuth, requireModule } from "../middlewares/auth";
 import { googleCallback, googleConnect, googleDisconnect, googleStatus } from "../controllers/google.controller";
 
@@ -127,6 +143,10 @@ router.get("/public/form-invites/:code", getInviteByCode);
 router.post("/public/form-invites/:code", submitInviteByCode);
 router.get("/public/nps/:token", getPublicInvite);
 router.post("/public/nps/:token", respondPublicInvite);
+// Link público da proposta e rastreio de visualização.
+router.get("/public/proposals/:token", getPublicProposal);
+router.post("/public/proposals/:token/views", startProposalView);
+router.post("/public/proposals/:token/views/:viewId", beaconBody, heartbeatProposalView);
 
 router.get("/google/callback", googleCallback);
 
@@ -191,6 +211,7 @@ router.delete("/labels/:id", settingsAccess, deleteDocument(Label));
 
 router.get("/funnels", listFunnels);
 router.post("/funnels", settingsAccess, createFunnel);
+router.put("/funnels/reorder", settingsAccess, reorderFunnels);
 router.patch("/funnels/:id", settingsAccess, updateFunnel);
 router.delete("/funnels/:id", settingsAccess, deleteFunnel);
 
@@ -252,6 +273,11 @@ router.patch("/finance/entries/:id", financeAccess, updateEntry);
 router.delete("/finance/entries/:id", financeAccess, deleteEntry);
 router.get("/finance/summary", financeAccess, getYearSummary);
 router.put("/finance/goals/:month", financeAccess, setGoal);
+router.get("/finance/distribution", financeAccess, getDistribution);
+router.put("/finance/distribution/buckets", financeAccess, saveBuckets);
+router.post("/finance/distributions", financeAccess, createDistribution);
+router.post("/finance/bucket-movements", financeAccess, createWithdrawal);
+router.delete("/finance/bucket-movements/:id", financeAccess, deleteMovement);
 
 router.get("/tools/:tool/documents", listToolDocuments);
 router.post("/tools/:tool/documents", createToolDocument);
@@ -259,6 +285,9 @@ router.get("/tools/:tool/documents/:id", getToolDocument);
 router.patch("/tools/:tool/documents/:id", updateToolDocument);
 router.delete("/tools/:tool/documents/:id", deleteToolDocument);
 router.post("/tools/:tool/documents/:id/duplicate", duplicateToolDocument);
+router.get("/tools/proposal/documents/:id/share", getProposalShare);
+router.post("/tools/proposal/documents/:id/share", createProposalShare);
+router.delete("/tools/proposal/documents/:id/share", disableProposalShare);
 
 const contractsAccess = requireModule("contratos");
 router.get("/contract-templates", requireModule("contratos", "configuracoes"), listContractTemplates);

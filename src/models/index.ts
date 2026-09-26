@@ -23,6 +23,10 @@ export { default as NPSSurvey } from "./NPSSurvey";
 export { default as NPSInvite } from "./NPSInvite";
 export { default as NPSRating } from "./NPSRating";
 export { default as FormInvite } from "./FormInvite";
+export { default as ProposalLink } from "./ProposalLink";
+export { default as ProposalView } from "./ProposalView";
+export { default as DistributionBucket } from "./DistributionBucket";
+export { default as BucketMovement } from "./BucketMovement";
 
 export type { IUser } from "./User";
 export type { ICompany } from "./Company";

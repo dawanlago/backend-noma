@@ -8,6 +8,7 @@ import {
 export interface DefaultOption {
   value?: string;
   label: string;
+  meta?: Record<string, unknown>;
 }
 
 const labels = (items: readonly string[]): DefaultOption[] => items.map((label) => ({ label }));
@@ -72,10 +73,25 @@ export const OPTION_LIST_DEFAULTS: Record<string, DefaultOption[]> = {
     "Edição",
     "Outro",
   ]),
+  // Catálogo de itens da Calculadora de Orçamento: meta = { unit, value } (valor unitário padrão)
+  budgetItem: [
+    { label: "Assistente", meta: { unit: "diária", value: 250 } },
+    { label: "Fotógrafa", meta: { unit: "diária", value: 600 } },
+    { label: "Storymaker", meta: { unit: "diária", value: 400 } },
+    { label: "Editor(a) de vídeo", meta: { unit: "hora", value: 80 } },
+    { label: "Deslocamento", meta: { unit: "unidade", value: 120 } },
+    { label: "Aluguel de equipamento", meta: { unit: "diária", value: 200 } },
+  ],
   briefingFormat: labels(["Vertical 9:16", "Horizontal 16:9", "Quadrado 1:1", "Formatos variados"]),
   briefingChannel: labels(["Instagram", "Instagram + TikTok", "YouTube", "Site/institucional", "Outro"]),
   briefingRevisions: labels(["1", "2", "3", "A definir"]),
   briefingStyle: labels(["Clean", "Lifestyle", "Comercial", "Premium", "A definir"]),
+  taskType: [
+    { value: "meeting", label: "Reunião" },
+    { value: "call", label: "Ligação" },
+    { value: "email", label: "E-mail" },
+    { value: "followup", label: "Follow-up" },
+  ],
   prospectSegment: [
     { value: "restaurant", label: "Restaurante/Gastronomia" },
     { value: "fitness", label: "Academia/Fitness" },
@@ -123,6 +139,7 @@ export function defaultItems(list: string) {
     value: item.value || item.label,
     label: item.label,
     order,
+    ...(item.meta ? { meta: item.meta } : {}),
   }));
 }
 

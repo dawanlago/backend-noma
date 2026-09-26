@@ -50,6 +50,17 @@ export interface ILead extends Document {
   history: ILeadHistory[];
   wonAt?: Date;
   lostAt?: Date;
+  /** Quando entrou no funil atual e na etapa atual (métricas do card). */
+  funnelEnteredAt?: Date;
+  stageEnteredAt?: Date;
+  /** Microetapa atual (dentro da etapa) e desde quando está nela. */
+  subStageId?: Types.ObjectId;
+  subStageEnteredAt?: Date;
+  /** Fechamento: valor oferecido na proposta e valor fechado (a diferença é o desconto). */
+  offeredValue?: number;
+  closedValue?: number;
+  /** Último contato com o cliente: parecer registrado ou atividade concluída. */
+  lastContactAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -104,6 +115,13 @@ const LeadSchema = new Schema<ILead>(
     history: { type: [LeadHistorySchema], default: [] },
     wonAt: { type: Date },
     lostAt: { type: Date },
+    funnelEnteredAt: { type: Date },
+    stageEnteredAt: { type: Date },
+    subStageId: { type: Schema.Types.ObjectId },
+    subStageEnteredAt: { type: Date },
+    lastContactAt: { type: Date },
+    offeredValue: { type: Number, min: 0 },
+    closedValue: { type: Number, min: 0 },
   },
   { timestamps: true, minimize: false },
 );
@@ -111,6 +129,10 @@ const LeadSchema = new Schema<ILead>(
 LeadSchema.pre("save", function syncDerived() {
   const productsTotal = (this.products || []).reduce((total, item) => total + (Number(item.price) || 0), 0);
   this.value = Math.round((productsTotal + (Number(this.customValue) || 0)) * 100) / 100;
+  const now = new Date();
+  if (this.isNew || this.isModified("funnelId")) this.funnelEnteredAt = now;
+  if (this.isNew || this.isModified("stageId")) this.stageEnteredAt = now;
+  if (this.isNew || this.isModified("stageId") || this.isModified("subStageId")) this.subStageEnteredAt = now;
   if (this.isModified("status")) {
     this.wonAt = this.status === "won" ? this.wonAt || new Date() : undefined;
     this.lostAt = this.status === "lost" ? this.lostAt || new Date() : undefined;
