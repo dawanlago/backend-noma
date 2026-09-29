@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import AppSettings from "../models/AppSettings";
+import { emailConfigured, sendMail, testMail } from "../lib/email";
 import { getSettings } from "../lib/seedDefaults";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -42,6 +43,25 @@ export async function updateSettings(req: Request, res: Response, next: NextFunc
     }
     await doc.save();
     res.json({ data: publicSettings(doc) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /settings/test-email { to? } — manda um e-mail de teste (padrão: para quem está logado). */
+export async function sendTestEmail(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!emailConfigured()) {
+      res.status(400).json({ error: "Envio de e-mail não configurado no servidor (SMTP_HOST, SMTP_USER e SMTP_PASS)." });
+      return;
+    }
+    const to = typeof req.body?.to === "string" && req.body.to.includes("@") ? req.body.to.trim() : req.user!.email;
+    try {
+      res.json({ data: await sendMail(testMail(to)) });
+    } catch (error) {
+      const err = error as Error & { responseCode?: number };
+      res.status(502).json({ error: `O servidor de e-mail recusou o envio: ${err.message}` });
+    }
   } catch (error) {
     next(error);
   }

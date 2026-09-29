@@ -28,6 +28,17 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET || "noma-crm-dev-jwt-secret-change-me",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   cloudinary: parseCloudinaryUrl(process.env.CLOUDINARY_URL),
+  /** Envio de e-mail por SMTP (Google Workspace: smtp.gmail.com, porta 465, senha de app). */
+  smtp:
+    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+      ? {
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT) || 465,
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+          from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        }
+      : null,
   /** Integração com o Google Agenda (OAuth por usuário). */
   google:
     process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI

@@ -28,7 +28,7 @@ import {
   listToolDocuments,
   updateToolDocument,
 } from "../controllers/tool.controller";
-import { readSettings, updateSettings } from "../controllers/settings.controller";
+import { readSettings, sendTestEmail, updateSettings } from "../controllers/settings.controller";
 import { createOption, deleteOption, listOptions, reorderOptions, updateOption } from "../controllers/option.controller";
 import {
   createCustomField,
@@ -163,6 +163,7 @@ router.get("/dashboard", getDashboard);
 
 router.get("/settings", readSettings);
 router.patch("/settings", settingsAccess, updateSettings);
+router.post("/settings/test-email", requireAdmin, sendTestEmail);
 
 router.get("/options", listOptions);
 // Qualquer usuário cadastra uma opção pelo atalho dos formulários; editar e excluir fica nas configurações.
