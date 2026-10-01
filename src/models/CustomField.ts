@@ -10,6 +10,8 @@ export interface ICustomField extends Document {
   label: string;
   type: CustomFieldType;
   order: number;
+  /** Só em negociações: vazio = todos os funis; preenchido = só as negociações desse funil. */
+  funnelId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +23,7 @@ const CustomFieldSchema = new Schema<ICustomField>(
     label: { type: String, required: true, trim: true },
     type: { type: String, enum: CUSTOM_FIELD_TYPES, default: "text" },
     order: { type: Number, default: 0 },
+    funnelId: { type: Schema.Types.ObjectId, ref: "Funnel" },
   },
   { timestamps: true },
 );

@@ -20,6 +20,15 @@ const labels = (items: readonly string[]): DefaultOption[] => items.map((label) 
 export const OPTION_LIST_DEFAULTS: Record<string, DefaultOption[]> = {
   leadService: labels(LEAD_SERVICES),
   leadSource: labels(["Instagram", "Indicação", "Google", "Site", "Evento/networking", "Prospecção ativa", "Formulário", "Outro"]),
+  lostReason: labels(["Preço", "Fechou com concorrente", "Sem retorno", "Sem orçamento no momento", "Fora do perfil", "Outro"]),
+  // Categorias de produto: meta = { costs: [{ label, value }] } (linhas de custo sugeridas ao escolher a categoria)
+  productCategory: [
+    { label: "Vídeo", meta: { costs: ["Captação", "Edição", "Equipamento", "Deslocamento"].map((label) => ({ label, value: 0 })) } },
+    { label: "Fotografia", meta: { costs: ["Fotógrafo(a)", "Tratamento de imagens", "Deslocamento"].map((label) => ({ label, value: 0 })) } },
+    { label: "Evento", meta: { costs: ["Equipe", "Equipamento", "Deslocamento", "Alimentação"].map((label) => ({ label, value: 0 })) } },
+    { label: "Social media", meta: { costs: ["Planejamento", "Captação", "Edição", "Design"].map((label) => ({ label, value: 0 })) } },
+    { label: "Outro" },
+  ],
   niche: labels([
     "Restaurante/Gastronomia",
     "Academia/Fitness",
@@ -41,6 +50,8 @@ export const OPTION_LIST_DEFAULTS: Record<string, DefaultOption[]> = {
     "Assistente/Secretária",
     "Outro",
   ]),
+  // Relações entre registros (contato, empresa, negociação): "A é [tipo] de B".
+  relationType: labels(["Sócio(a)", "Cônjuge", "Indicou", "Assistente", "Fornecedor de"]),
   relationship: [
     { value: "client", label: "Cliente" },
     { value: "lead", label: "Lead" },

@@ -12,6 +12,7 @@ import {
   updateDocument,
 } from "../controllers/crud.controller";
 import { getDashboard } from "../controllers/dashboard.controller";
+import { createProduct, updateProduct } from "../controllers/product.controller";
 import { createUser, deleteUser, getUser, listUsers, updateUser } from "../controllers/user.controller";
 import {
   createEntry,
@@ -99,9 +100,12 @@ import {
   getContactProfile,
   listCompanies,
   listContacts,
+  listDuplicateContacts,
+  mergeContacts,
   updateCompany,
   updateContact,
 } from "../controllers/base.controller";
+import { createRelation, deleteRelation, listRelations } from "../controllers/relation.controller";
 import {
   createInvite as createNpsInvite,
   createSurvey,
@@ -202,15 +206,22 @@ router.delete("/companies/:id", requireModule("base"), deleteCompany);
 router.get("/contacts", listContacts);
 router.post("/contacts", baseWrite, createContact);
 router.get("/contacts/by-phone", findContactsByPhone);
+router.get("/contacts/duplicates", listDuplicateContacts);
 router.get("/contacts/:id", getContact);
 router.get("/contacts/:id/profile", getContactProfile);
 router.patch("/contacts/:id", baseWrite, updateContact);
+// Mesclar exclui o contato de origem: mesma permissão de excluir.
+router.post("/contacts/:id/merge", requireModule("base"), mergeContacts);
 router.delete("/contacts/:id", requireModule("base"), deleteContact);
 
+router.get("/relations", listRelations);
+router.post("/relations", baseWrite, createRelation);
+router.delete("/relations/:id", baseWrite, deleteRelation);
+
 router.get("/products", listDocuments(Product));
-router.post("/products", requireModule("produtos", "crm"), createDocument(Product));
+router.post("/products", requireModule("produtos", "crm"), createProduct);
 router.get("/products/:id", getDocument(Product));
-router.patch("/products/:id", requireModule("produtos"), updateDocument(Product));
+router.patch("/products/:id", requireModule("produtos"), updateProduct);
 router.delete("/products/:id", requireModule("produtos"), deleteDocument(Product));
 
 router.get("/labels", listDocuments(Label));

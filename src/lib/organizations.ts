@@ -23,6 +23,9 @@ export const DATA_MIGRATIONS = [
   "org-stamp-v1",
   "org-indexes-v1",
   "org-users-v1",
+  "contact-links-v1",
+  "lead-created-by-v1",
+  "product-costs-v1",
 ];
 
 /** Carimba com a empresa todo registro que ainda não tem uma (dados de antes da separação). */
@@ -96,8 +99,15 @@ async function copyConfigFrom(sourceId: Types.ObjectId) {
   if (source.labels.length) await Label.insertMany(source.labels);
   // Opções de campo ficam na lista "field:<id do campo>": o id muda na cópia.
   const fieldIds = new Map<string, string>();
+  // Campo de um funil só: aponta para o funil de mesmo nome na cópia.
+  const sourceFunnels = await runWithOrg(sourceId, () => Funnel.find().select("name").lean());
+  const copiedFunnels = await Funnel.find().select("name").lean();
+  const funnelOf = (id: unknown) => {
+    const name = sourceFunnels.find((funnel) => String(funnel._id) === String(id))?.name;
+    return copiedFunnels.find((funnel) => funnel.name === name)?._id;
+  };
   for (const { _id, ...field } of source.fields) {
-    const created = await CustomField.create(field);
+    const created = await CustomField.create({ ...field, funnelId: field.funnelId ? funnelOf(field.funnelId) : undefined });
     fieldIds.set(String(_id), String(created._id));
   }
   const options = source.options

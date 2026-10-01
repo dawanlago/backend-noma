@@ -17,6 +17,7 @@ import {
 } from "../lib/forms";
 import { firstOpenStage } from "../lib/funnels";
 import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
+import { phoneKey } from "../lib/phone";
 import { getSettings } from "../lib/seedDefaults";
 
 /** Identidade mostrada no topo do formulário público: a do próprio formulário ou a da produtora. */
@@ -180,7 +181,8 @@ export async function submitPublicForm(req: Request, res: Response, next: NextFu
     const info = contactFromAnswers(form.fields, answers);
     if (form.createLead && (info.name || info.email || info.phone)) {
       let contact = info.email ? await Contact.findOne({ email: info.email }) : null;
-      if (!contact && info.phone) contact = await Contact.findOne({ phone: info.phone });
+      // Telefone comparado pela chave normalizada (com ou sem máscara, DDI ou o 9).
+      if (!contact && phoneKey(info.phone)) contact = await Contact.findOne({ phoneKey: phoneKey(info.phone) });
       let companyId = contact?.companyId;
       if (!companyId && info.company) {
         const company =
@@ -385,6 +387,7 @@ export async function submitInviteByCode(req: Request, res: Response, next: Next
     if (invite.contactId) {
       const update: Record<string, string> = {};
       for (const key of ["name", "email", "phone", "instagram"] as const) if (info[key]) update[key] = info[key];
+      if (update.phone) update.phoneKey = phoneKey(update.phone);
       if (Object.keys(update).length) await Contact.updateOne({ _id: invite.contactId }, { $set: update });
     }
     await Lead.updateOne(

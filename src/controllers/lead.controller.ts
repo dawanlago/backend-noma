@@ -4,9 +4,11 @@ import Company from "../models/Company";
 import Contact from "../models/Contact";
 import Funnel, { type IFunnel } from "../models/Funnel";
 import Lead, { type ILead } from "../models/Lead";
+import OptionItem from "../models/OptionItem";
 import Task from "../models/Task";
+import User from "../models/User";
 import { firstOpenStage, firstStageOfKind } from "../lib/funnels";
-import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
+import { ownerScope, recordScope } from "../lib/ownership";
 import type { LeadStatus } from "../types";
 
 const TEMPERATURES = ["cold", "warm", "hot"];
@@ -53,6 +55,7 @@ function applyBody(lead: ILead, body: Record<string, unknown>) {
       .map((item) => ({
         productId: objectIdOrNull(item.productId) || undefined,
         name: String(item.name).trim(),
+        description: typeof item.description === "string" ? item.description.trim() : "",
         price: Math.max(0, Number(item.price) || 0),
       }));
   }
@@ -104,9 +107,60 @@ function moveToSubStage(lead: ILead, funnel: IFunnel, subStageId: unknown, userN
   lead.history.push({ at: new Date(), text: sub ? `Microetapa "${sub.name}" (${stage.name})` : `Saiu da microetapa (${stage.name})`, userName });
 }
 
+const LOST_REASON_REQUIRED = "Informe o motivo da perda para marcar a negociação como perdida.";
+
+/**
+ * Grava o motivo (e a observação) da perda e registra no histórico.
+ * Devolve `false` quando o motivo não veio — perder uma negociação sempre exige motivo.
+ */
+async function applyLoss(lead: ILead, body: Record<string, unknown>, userName: string) {
+  const reason = typeof body.lostReason === "string" ? body.lostReason.trim() : "";
+  if (!reason) return false;
+  const note = typeof body.lostNote === "string" ? body.lostNote.trim() : "";
+  const option = await OptionItem.findOne({ list: "lostReason", value: reason }).select("label").lean();
+  lead.lostReason = reason;
+  lead.lostNote = note || undefined;
+  lead.history.push({
+    at: new Date(),
+    text: `Negociação perdida — motivo: ${option?.label || reason}${note ? ` (${note})` : ""}`,
+    userName,
+  });
+  return true;
+}
+
+function lossRequired(res: Response) {
+  res.status(400).json({ error: LOST_REASON_REQUIRED, code: "LOST_REASON_REQUIRED" });
+}
+
+/**
+ * Troca o responsável (`ownerId`): só quem vê todas as negociações, e só para usuários da empresa.
+ * Devolve a mensagem de erro (com o status) ou null.
+ */
+async function changeOwner(req: Request, lead: ILead): Promise<{ status: number; error: string } | null> {
+  const ownerId = objectIdOrNull(req.body.ownerId);
+  if (req.body.ownerId === undefined || String(req.body.ownerId) === String(lead.ownerId)) return null;
+  if (req.scopeLevel !== "all") return { status: 403, error: "Só quem vê todas as negociações pode trocar o responsável." };
+  const orgId = req.access?.org._id;
+  const user = ownerId
+    ? await User.findOne({ _id: ownerId, isActive: { $ne: false }, $or: [{ "memberships.orgId": orgId }, { isSuperAdmin: true }] }).select("name").lean()
+    : null;
+  if (!user) return { status: 400, error: "Usuário não encontrado nesta empresa." };
+  lead.ownerId = user._id;
+  lead.history.push({ at: new Date(), text: `Responsável alterado para ${user.name}`, userName: req.user!.name });
+  return null;
+}
+
+/** Anexa os nomes do responsável (`ownerName`) e de quem criou (`createdByName`). */
+async function withPeople<T extends { ownerId?: unknown; createdBy?: unknown }>(docs: T[]) {
+  const ids = [...new Set(docs.flatMap((doc) => [String(doc.ownerId), String(doc.createdBy)]).filter((id) => isValidObjectId(id)))];
+  const users = await User.find({ _id: { $in: ids } }).select("name").lean();
+  const names = new Map(users.map((user) => [String(user._id), user.name]));
+  return docs.map((doc) => ({ ...doc, ownerName: names.get(String(doc.ownerId)) || "", createdByName: names.get(String(doc.createdBy)) || "" }));
+}
+
 async function respond(res: Response, lead: ILead, status = 200) {
-  const [withName] = await withOwnerNames([lead.toJSON() as never]);
-  res.status(status).json({ data: withName });
+  const [withNames] = await withPeople([lead.toJSON() as { ownerId?: unknown; createdBy?: unknown }]);
+  res.status(status).json({ data: withNames });
 }
 
 export async function listLeads(req: Request, res: Response, next: NextFunction) {
@@ -121,7 +175,7 @@ export async function listLeads(req: Request, res: Response, next: NextFunction)
     }
     const docs = await Lead.find(filter).select("-history").sort({ updatedAt: -1 }).lean();
     const data = docs.map(({ comments, ...doc }) => ({ ...doc, commentsCount: comments?.length || 0 }));
-    res.json({ data: await withOwnerNames(data) });
+    res.json({ data: await withPeople(data) });
   } catch (error) {
     next(error);
   }
@@ -144,7 +198,7 @@ export async function createLead(req: Request, res: Response, next: NextFunction
       res.status(400).json({ error: "Cadastre um funil com etapas antes de criar negociações." });
       return;
     }
-    const lead = new Lead({ ownerId: req.user!._id, funnelId: funnel._id });
+    const lead = new Lead({ ownerId: req.user!._id, createdBy: req.user!._id, funnelId: funnel._id });
     applyBody(lead, req.body);
     await syncRelations(lead);
     if (!lead.name) {
@@ -156,6 +210,7 @@ export async function createLead(req: Request, res: Response, next: NextFunction
     lead.status = stage.kind;
     lead.subStageId = stage.subStages?.find((sub: { _id: Types.ObjectId }) => String(sub._id) === String(req.body.subStageId))?._id || stage.subStages?.[0]?._id;
     lead.history.push({ at: new Date(), text: `Negociação criada em "${stage.name}" (${funnel.name})`, userName: req.user!.name });
+    if (stage.kind === "lost" && !(await applyLoss(lead, req.body, req.user!.name))) return lossRequired(res);
     await lead.save();
     await respond(res, lead, 201);
   } catch (error) {
@@ -167,8 +222,14 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
   try {
     const lead = await Lead.findOne({ _id: req.params.id, ...recordScope(req) });
     if (!lead) return notFound(res);
+    const wasLost = lead.status === "lost";
     applyBody(lead, req.body);
     if (lead.isModified("contactId") || lead.isModified("companyId") || !lead.name) await syncRelations(lead);
+    const ownerError = await changeOwner(req, lead);
+    if (ownerError) {
+      res.status(ownerError.status).json({ error: ownerError.error });
+      return;
+    }
 
     const funnelChanged = req.body.funnelId && String(req.body.funnelId) !== String(lead.funnelId);
     if (funnelChanged || req.body.stageId) {
@@ -183,6 +244,11 @@ export async function updateLead(req: Request, res: Response, next: NextFunction
     } else if (req.body.subStageId !== undefined) {
       const funnel = await Funnel.findById(lead.funnelId);
       if (funnel) moveToSubStage(lead, funnel, req.body.subStageId, req.user!.name);
+    }
+    // Entrou numa etapa de perda (arrastando no funil, pela extensão...): exige o motivo.
+    // Já perdida: o motivo pode ser corrigido enviando `lostReason` de novo.
+    if (lead.status === "lost" && (!wasLost || typeof req.body.lostReason === "string")) {
+      if (!(await applyLoss(lead, req.body, req.user!.name)) && !wasLost) return lossRequired(res);
     }
     await lead.save();
     await respond(res, lead);
@@ -218,16 +284,19 @@ export async function setLeadStatus(req: Request, res: Response, next: NextFunct
     }
     const lead = await Lead.findOne({ _id: req.params.id, ...recordScope(req) });
     if (!lead) return notFound(res);
+    if (status === "lost" && !(typeof req.body.lostReason === "string" && req.body.lostReason.trim())) return lossRequired(res);
     const funnel = await Funnel.findById(lead.funnelId);
     const stage = funnel ? (status === "open" ? firstOpenStage(funnel.stages) : firstStageOfKind(funnel.stages, status)) : undefined;
     if (stage && funnel) {
       if (String(lead.stageId) !== String(stage._id)) lead.subStageId = stage.subStages?.[0]?._id;
       lead.stageId = stage._id;
-      lead.history.push({ at: new Date(), text: `${STATUS_TEXT[status]} — etapa "${stage.name}"`, userName: req.user!.name });
-    } else {
+      // A perda entra no histórico com o motivo (applyLoss).
+      if (status !== "lost") lead.history.push({ at: new Date(), text: `${STATUS_TEXT[status]} — etapa "${stage.name}"`, userName: req.user!.name });
+    } else if (status !== "lost") {
       lead.history.push({ at: new Date(), text: STATUS_TEXT[status], userName: req.user!.name });
     }
     lead.status = status;
+    if (status === "lost") await applyLoss(lead, req.body, req.user!.name);
     await lead.save();
     await respond(res, lead);
   } catch (error) {

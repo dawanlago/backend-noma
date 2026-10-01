@@ -5,6 +5,8 @@ import type { LeadStatus, LeadTemperature } from "../types";
 export interface ILeadProduct {
   productId?: Types.ObjectId;
   name: string;
+  /** Descrição só desta negociação (começa igual à do catálogo). */
+  description?: string;
   price: number;
 }
 
@@ -27,7 +29,10 @@ export interface ILeadHistory {
 /** Negociação do CRM (o "card" do funil). */
 export interface ILead extends Document {
   _id: Types.ObjectId;
+  /** Responsável pela negociação (pode ser trocado por quem vê todas). */
   ownerId: Types.ObjectId;
+  /** Quem criou a negociação (não muda). */
+  createdBy?: Types.ObjectId;
   name: string;
   contactId?: Types.ObjectId;
   companyId?: Types.ObjectId;
@@ -51,6 +56,9 @@ export interface ILead extends Document {
   history: ILeadHistory[];
   wonAt?: Date;
   lostAt?: Date;
+  /** Motivo da perda (lista "lostReason") e observação; limpos ao reabrir. */
+  lostReason?: string;
+  lostNote?: string;
   /** Quando entrou no funil atual e na etapa atual (métricas do card). */
   funnelEnteredAt?: Date;
   stageEnteredAt?: Date;
@@ -70,6 +78,7 @@ const LeadProductSchema = new Schema<ILeadProduct>(
   {
     productId: { type: Schema.Types.ObjectId, ref: "Product" },
     name: { type: String, trim: true, required: true },
+    description: { type: String, trim: true, default: "" },
     price: { type: Number, min: 0, default: 0 },
   },
   { _id: false },
@@ -95,6 +104,7 @@ const LeadHistorySchema = new Schema<ILeadHistory>(
 const LeadSchema = new Schema<ILead>(
   {
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     name: { type: String, required: true, trim: true },
     contactId: { type: Schema.Types.ObjectId, ref: "Contact" },
     companyId: { type: Schema.Types.ObjectId, ref: "Company" },
@@ -116,6 +126,8 @@ const LeadSchema = new Schema<ILead>(
     history: { type: [LeadHistorySchema], default: [] },
     wonAt: { type: Date },
     lostAt: { type: Date },
+    lostReason: { type: String, trim: true },
+    lostNote: { type: String, trim: true },
     funnelEnteredAt: { type: Date },
     stageEnteredAt: { type: Date },
     subStageId: { type: Schema.Types.ObjectId },
@@ -130,6 +142,12 @@ const LeadSchema = new Schema<ILead>(
 LeadSchema.pre("save", function syncDerived() {
   const productsTotal = (this.products || []).reduce((total, item) => total + (Number(item.price) || 0), 0);
   this.value = Math.round((productsTotal + (Number(this.customValue) || 0)) * 100) / 100;
+  if (this.isNew && !this.createdBy) this.createdBy = this.ownerId;
+  // Fora de "perdida" não há motivo de perda.
+  if (this.status !== "lost") {
+    this.lostReason = undefined;
+    this.lostNote = undefined;
+  }
   const now = new Date();
   if (this.isNew || this.isModified("funnelId")) this.funnelEnteredAt = now;
   if (this.isNew || this.isModified("stageId")) this.stageEnteredAt = now;

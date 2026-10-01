@@ -1,6 +1,7 @@
 export { default as User } from "./User";
 export { default as Company } from "./Company";
 export { default as Contact } from "./Contact";
+export { default as Relation } from "./Relation";
 export { default as Product } from "./Product";
 export { default as Label } from "./Label";
 export { default as Lead } from "./Lead";

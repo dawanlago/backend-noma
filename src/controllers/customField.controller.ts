@@ -1,8 +1,18 @@
 import type { NextFunction, Request, Response } from "express";
+import { isValidObjectId } from "mongoose";
 import CustomField from "../models/CustomField";
+import Funnel from "../models/Funnel";
 import OptionItem from "../models/OptionItem";
 import { slugify, uniqueValue } from "../lib/optionLists";
 import { CUSTOM_FIELD_ENTITIES, CUSTOM_FIELD_TYPES, type CustomFieldEntity } from "../types";
+
+/** Funil de um campo de negociação: "" ou ausente = todos os funis. Devolve `false` se o funil não existe. */
+async function funnelFor(entity: CustomFieldEntity, value: unknown) {
+  if (entity !== "lead" || !value) return undefined;
+  if (typeof value !== "string" || !isValidObjectId(value)) return false;
+  const funnel = await Funnel.findById(value).select("_id").lean();
+  return funnel ? funnel._id : false;
+}
 
 export async function listCustomFields(req: Request, res: Response, next: NextFunction) {
   try {
@@ -24,9 +34,15 @@ export async function createCustomField(req: Request, res: Response, next: NextF
       res.status(400).json({ error: "Informe onde o campo aparece e o nome dele." });
       return;
     }
+    const funnelId = await funnelFor(entity, req.body.funnelId);
+    if (funnelId === false) {
+      res.status(400).json({ error: "Funil não encontrado." });
+      return;
+    }
     const siblings = await CustomField.find({ entity }).select("key order").lean();
     const doc = await CustomField.create({
       entity,
+      funnelId,
       label,
       type,
       key: uniqueValue(slugify(label, "campo"), siblings.map((field) => field.key)),
@@ -48,6 +64,14 @@ export async function updateCustomField(req: Request, res: Response, next: NextF
     if (typeof req.body.label === "string" && req.body.label.trim()) doc.label = req.body.label.trim();
     if (CUSTOM_FIELD_TYPES.includes(req.body.type)) doc.type = req.body.type;
     if (typeof req.body.order === "number") doc.order = req.body.order;
+    if (req.body.funnelId !== undefined) {
+      const funnelId = await funnelFor(doc.entity, req.body.funnelId);
+      if (funnelId === false) {
+        res.status(400).json({ error: "Funil não encontrado." });
+        return;
+      }
+      doc.funnelId = funnelId;
+    }
     await doc.save();
     res.json({ data: doc.toJSON() });
   } catch (error) {

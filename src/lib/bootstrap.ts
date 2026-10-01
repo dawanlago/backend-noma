@@ -2,6 +2,8 @@ import { connectToDatabase } from "../config/db";
 import Company from "../models/Company";
 import Organization from "../models/Organization";
 import { ensurePrimaryOrganization, migrateToOrganizations } from "./organizations";
+import { migrateDealsAndProducts } from "./dealMigrations";
+import { migrateContacts } from "./contactMigrations";
 import { seedAdminUser } from "./seedAdmin";
 import { runWithOrg } from "./tenant";
 import {
@@ -37,6 +39,14 @@ export function bootstrapApp() {
       // Listas de opções novas chegam a todas as empresas.
       const others = await Organization.find({ _id: { $ne: primary._id } }).select("_id").lean();
       for (const org of others) await runWithOrg(org._id, seedOptionLists);
+      // Quem criou a negociação e linhas de custo dos produtos: vale para todas as empresas que já existiam.
+      for (const org of [primary, ...others]) {
+        await runWithOrg(org._id, migrateDealsAndProducts).catch((error) => console.error("[migracao:negociacoes-produtos]", error));
+      }
+      // Contatos de antes: telefone normalizado (duplicados) e lista de empresas vinculadas.
+      for (const org of [primary, ...others]) {
+        await runWithOrg(org._id, migrateContacts).catch((error) => console.error("[migracao:contact-links-v1]", error));
+      }
       // Remove o índice único antigo de CNPJ: agora ele é opcional.
       await Company.syncIndexes();
     })().catch((error) => {
