@@ -30,7 +30,10 @@ function isTrustedHost(hostname: string): boolean {
     hostname === "netlify.app" ||
     hostname.endsWith(".netlify.app") ||
     hostname === "vercel.app" ||
-    hostname.endsWith(".vercel.app")
+    hostname.endsWith(".vercel.app") ||
+    // Domínio próprio da Noma (com ou sem www / subdomínios).
+    hostname === "nomacria.com" ||
+    hostname.endsWith(".nomacria.com")
   );
 }
 
