@@ -37,7 +37,7 @@ function isTrustedHost(hostname: string): boolean {
   );
 }
 
-function isAllowedOrigin(origin?: string): boolean {
+export function isAllowedOrigin(origin?: string): boolean {
   if (!origin) {
     return true;
   }

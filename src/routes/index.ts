@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Label, Product, User } from "../models";
 import { getHealth } from "../controllers/health.controller";
-import { login, me } from "../controllers/auth.controller";
+import { changePassword, forgotPassword, login, me, resetPassword } from "../controllers/auth.controller";
 import {
   createDocument,
   deleteDocument,
@@ -134,7 +134,10 @@ const router = Router();
 
 router.get("/health", getHealth);
 router.post("/auth/login", login);
+router.post("/auth/forgot-password", forgotPassword);
+router.post("/auth/reset-password", resetPassword);
 router.get("/auth/me", requireAuth, me);
+router.post("/auth/change-password", requireAuth, changePassword);
 
 // Formulários públicos (link enviado ao cliente), sem login.
 router.get("/public/forms/:publicId", getPublicForm);

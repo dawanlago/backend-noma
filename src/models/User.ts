@@ -16,6 +16,9 @@ export interface IUser extends Document {
   googleEmail?: string;
   googleRefreshToken?: string;
   googleConnectedAt?: Date;
+  /** Redefinição de senha: hash do código enviado por e-mail e validade. */
+  resetTokenHash?: string;
+  resetTokenExpiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(plainPassword: string): Promise<boolean>;
@@ -43,6 +46,8 @@ const UserSchema = new Schema<IUser>(
     googleEmail: { type: String, default: "" },
     googleRefreshToken: { type: String, select: false },
     googleConnectedAt: { type: Date },
+    resetTokenHash: { type: String, select: false },
+    resetTokenExpiresAt: { type: Date, select: false },
   },
   { timestamps: true },
 );
@@ -69,6 +74,8 @@ UserSchema.set("toJSON", {
   transform: (_doc, ret) => {
     delete ret.password;
     delete ret.googleRefreshToken;
+    delete ret.resetTokenHash;
+    delete ret.resetTokenExpiresAt;
     return ret;
   },
 });
