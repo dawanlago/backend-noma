@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export interface IFormResponse extends Document {
   _id: Types.ObjectId;
@@ -27,6 +28,8 @@ const FormResponseSchema = new Schema<IFormResponse>(
 );
 
 FormResponseSchema.index({ formId: 1, createdAt: -1 });
+
+FormResponseSchema.plugin(tenantPlugin);
 
 const FormResponse: Model<IFormResponse> =
   models.FormResponse || model<IFormResponse>("FormResponse", FormResponseSchema);

@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export interface IContact extends Document {
   _id: Types.ObjectId;
@@ -52,6 +53,8 @@ const ContactSchema = new Schema<IContact>(
 ContactSchema.index({ email: 1 });
 ContactSchema.index({ companyId: 1 });
 ContactSchema.index({ kinds: 1 });
+
+ContactSchema.plugin(tenantPlugin);
 
 const Contact: Model<IContact> =
   models.Contact || model<IContact>("Contact", ContactSchema);

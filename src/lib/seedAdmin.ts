@@ -9,9 +9,10 @@ export async function seedAdminUser() {
   const existing = await User.findOne({ email: ADMIN_EMAIL });
 
   if (existing) {
-    if (existing.role !== "admin" || !existing.isActive) {
+    if (existing.role !== "admin" || !existing.isActive || !existing.isSuperAdmin) {
       existing.role = "admin";
       existing.isActive = true;
+      existing.isSuperAdmin = true;
       await existing.save();
     }
     return;
@@ -23,6 +24,7 @@ export async function seedAdminUser() {
     password: ADMIN_PASSWORD,
     role: "admin",
     isActive: true,
+    isSuperAdmin: true,
   });
 
   console.log(`Admin user created: ${ADMIN_EMAIL}`);

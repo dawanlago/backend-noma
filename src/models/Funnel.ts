@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 import type { StageKind } from "../types";
 
 /** Microetapa: subdivisão de uma etapa (ex.: "Proposta enviada" → "Aguardando retorno", "Em ajuste"). */
@@ -47,6 +48,8 @@ const FunnelSchema = new Schema<IFunnel>(
   },
   { timestamps: true },
 );
+
+FunnelSchema.plugin(tenantPlugin);
 
 const Funnel: Model<IFunnel> = models.Funnel || model<IFunnel>("Funnel", FunnelSchema);
 

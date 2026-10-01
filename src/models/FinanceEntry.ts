@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 import type { FinanceStatus, TransactionType } from "../types";
 
 export interface IFinanceEntry extends Document {
@@ -57,6 +58,8 @@ const FinanceEntrySchema = new Schema<IFinanceEntry>(
 FinanceEntrySchema.index({ ownerId: 1, date: 1 });
 FinanceEntrySchema.index({ recurringId: 1, date: 1 });
 FinanceEntrySchema.index({ leadId: 1, date: 1 });
+
+FinanceEntrySchema.plugin(tenantPlugin);
 
 const FinanceEntry: Model<IFinanceEntry> =
   models.FinanceEntry || model<IFinanceEntry>("FinanceEntry", FinanceEntrySchema);

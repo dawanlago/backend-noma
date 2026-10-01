@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /** Link único de NPS enviado a um contato (responde uma vez). */
 export interface INPSInvite extends Document {
@@ -30,6 +31,8 @@ const NPSInviteSchema = new Schema<INPSInvite>(
 );
 
 NPSInviteSchema.index({ surveyId: 1, contactId: 1, status: 1 });
+
+NPSInviteSchema.plugin(tenantPlugin);
 
 const NPSInvite: Model<INPSInvite> = models.NPSInvite || model<INPSInvite>("NPSInvite", NPSInviteSchema);
 

@@ -1,11 +1,12 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export interface IBrandColor {
   name: string;
   hex: string;
 }
 
-/** Configurações gerais do workspace (documento único, key = "main"). */
+/** Configurações gerais de cada empresa (um documento por empresa, key = "main"). */
 export interface IAppSettings extends Document {
   _id: Types.ObjectId;
   key: string;
@@ -52,7 +53,7 @@ const BrandColorSchema = new Schema<IBrandColor>(
 
 const AppSettingsSchema = new Schema<IAppSettings>(
   {
-    key: { type: String, required: true, unique: true, default: "main" },
+    key: { type: String, required: true, default: "main" },
     companyName: { type: String, trim: true, default: DEFAULT_SETTINGS.companyName },
     welcomeEyebrow: { type: String, trim: true, default: DEFAULT_SETTINGS.welcomeEyebrow },
     welcomeTitle: { type: String, trim: true, default: DEFAULT_SETTINGS.welcomeTitle },
@@ -67,6 +68,10 @@ const AppSettingsSchema = new Schema<IAppSettings>(
   },
   { timestamps: true },
 );
+
+AppSettingsSchema.plugin(tenantPlugin);
+// Um documento de configurações por empresa.
+AppSettingsSchema.index({ orgId: 1, key: 1 }, { unique: true });
 
 const AppSettings: Model<IAppSettings> =
   models.AppSettings || model<IAppSettings>("AppSettings", AppSettingsSchema);

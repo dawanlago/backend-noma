@@ -4,13 +4,8 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { isAllowedOrigin } from "../config/cors";
 import { env } from "../config/env";
 import { emailConfigured, sendMail } from "../lib/email";
-import User, { type IUser } from "../models/User";
-import { effectivePermissions } from "../lib/permissions";
-
-/** Usuário com os módulos que ele realmente pode acessar. */
-function withPermissions(user: IUser) {
-  return { ...user.toJSON(), permissions: effectivePermissions(user) };
-}
+import User from "../models/User";
+import { resolveAccess, sessionUser } from "../lib/access";
 
 function createToken(userId: string) {
   return jwt.sign({ userId }, env.jwtSecret, {
@@ -37,11 +32,17 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       return;
     }
 
+    const access = await resolveAccess(user, req.headers["x-org-id"]);
+    if (!access) {
+      res.status(403).json({ error: "Seu usuário não tem acesso a nenhuma empresa. Fale com um administrador." });
+      return;
+    }
+
     const token = createToken(user._id.toString());
 
     res.json({
       token,
-      user: withPermissions(user),
+      user: sessionUser(user, access),
     });
   } catch (error) {
     next(error);
@@ -49,7 +50,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 }
 
 export function me(req: Request, res: Response) {
-  res.json({ user: withPermissions(req.user!) });
+  res.json({ user: sessionUser(req.user!, req.access!) });
 }
 
 const MIN_PASSWORD = 8;

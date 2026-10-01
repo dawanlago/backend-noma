@@ -1,7 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
-import { hasModule } from "../lib/permissions";
+import { resolveAccess } from "../lib/access";
+import { runWithOrg } from "../lib/tenant";
+import { MODULES } from "../types";
 import User from "../models/User";
 import type { ModuleKey } from "../types";
 
@@ -27,8 +29,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
 
+    const access = await resolveAccess(user, req.headers["x-org-id"]);
+    if (!access) {
+      res.status(403).json({ error: "Seu usuário não tem acesso a nenhuma empresa. Fale com um administrador." });
+      return;
+    }
+
+    // Papel e módulos passam a valer para a empresa ativa (só em memória, nunca salvo).
+    user.role = access.role;
+    user.permissions = MODULES.filter((key) => access.levels[key] !== "none");
     req.user = user;
-    next();
+    req.access = access;
+    // Daqui em diante toda consulta fica restrita à empresa ativa.
+    runWithOrg(access.org._id, () => next());
   } catch {
     res.status(401).json({ error: "Não autorizado" });
   }
@@ -55,10 +68,13 @@ export function requireModule(...modules: ModuleKey[]) {
       res.status(401).json({ error: "Não autorizado" });
       return;
     }
-    if (!hasModule(req.user, ...modules)) {
+    // Vale o nível do primeiro módulo da lista a que o usuário tem acesso.
+    const granted = modules.find((key) => req.access?.levels[key] && req.access.levels[key] !== "none");
+    if (!granted) {
       res.status(403).json({ error: "Seu usuário não tem acesso a esta área." });
       return;
     }
+    req.scopeLevel = req.access!.levels[granted];
     next();
   };
 }

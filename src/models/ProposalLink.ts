@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /** Link público de uma proposta salva (um por documento), enviado ao cliente. */
 export interface IProposalLink extends Document {
@@ -27,6 +28,8 @@ const ProposalLinkSchema = new Schema<IProposalLink>(
   },
   { timestamps: true },
 );
+
+ProposalLinkSchema.plugin(tenantPlugin);
 
 const ProposalLink: Model<IProposalLink> =
   models.ProposalLink || model<IProposalLink>("ProposalLink", ProposalLinkSchema);

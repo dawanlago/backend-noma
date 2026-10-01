@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export interface INPSRating extends Document {
   _id: Types.ObjectId;
@@ -30,6 +31,8 @@ const NPSRatingSchema = new Schema<INPSRating>(
 
 NPSRatingSchema.index({ contactId: 1 });
 NPSRatingSchema.index({ date: -1 });
+
+NPSRatingSchema.plugin(tenantPlugin);
 
 const NPSRating: Model<INPSRating> = models.NPSRating || model<INPSRating>("NPSRating", NPSRatingSchema);
 

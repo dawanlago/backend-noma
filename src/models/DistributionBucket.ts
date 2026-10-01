@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /**
  * Caixa de distribuição (ex.: Operacional, Imposto, Lucro): recebe uma
@@ -23,6 +24,8 @@ const DistributionBucketSchema = new Schema<IDistributionBucket>(
   },
   { timestamps: true },
 );
+
+DistributionBucketSchema.plugin(tenantPlugin);
 
 const DistributionBucket: Model<IDistributionBucket> =
   models.DistributionBucket || model<IDistributionBucket>("DistributionBucket", DistributionBucketSchema);

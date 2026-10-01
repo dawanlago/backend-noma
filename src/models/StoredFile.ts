@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /** Arquivo enviado (ex.: contrato importado). O conteúdo fica no Cloudinary. */
 export interface IStoredFile extends Document {
@@ -40,6 +41,8 @@ const StoredFileSchema = new Schema<IStoredFile>(
 );
 
 StoredFileSchema.index({ ownerId: 1, category: 1, createdAt: -1 });
+
+StoredFileSchema.plugin(tenantPlugin);
 
 const StoredFile: Model<IStoredFile> = models.StoredFile || model<IStoredFile>("StoredFile", StoredFileSchema);
 

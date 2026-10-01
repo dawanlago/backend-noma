@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 import type { LeadStatus, LeadTemperature } from "../types";
 
 export interface ILeadProduct {
@@ -142,6 +143,8 @@ LeadSchema.pre("save", function syncDerived() {
 LeadSchema.index({ ownerId: 1, funnelId: 1 });
 LeadSchema.index({ contactId: 1 });
 LeadSchema.index({ companyId: 1 });
+
+LeadSchema.plugin(tenantPlugin);
 
 const Lead: Model<ILead> = models.Lead || model<ILead>("Lead", LeadSchema);
 

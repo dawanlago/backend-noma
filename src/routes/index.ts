@@ -1,5 +1,7 @@
 import { Router } from "express";
-import { Label, Product, User } from "../models";
+import { Form, FormInvite, Label, NPSInvite, Product, ProposalLink } from "../models";
+import { publicOrg } from "../middlewares/publicOrg";
+import { createOrg, listOrgs, updateOrg } from "../controllers/org.controller";
 import { getHealth } from "../controllers/health.controller";
 import { changePassword, forgotPassword, login, me, resetPassword } from "../controllers/auth.controller";
 import {
@@ -10,7 +12,7 @@ import {
   updateDocument,
 } from "../controllers/crud.controller";
 import { getDashboard } from "../controllers/dashboard.controller";
-import { createUser, updateUser } from "../controllers/user.controller";
+import { createUser, deleteUser, getUser, listUsers, updateUser } from "../controllers/user.controller";
 import {
   createEntry,
   deleteEntry,
@@ -140,16 +142,16 @@ router.get("/auth/me", requireAuth, me);
 router.post("/auth/change-password", requireAuth, changePassword);
 
 // Formulários públicos (link enviado ao cliente), sem login.
-router.get("/public/forms/:publicId", getPublicForm);
-router.post("/public/forms/:publicId/responses", submitPublicForm);
-router.get("/public/form-invites/:code", getInviteByCode);
-router.post("/public/form-invites/:code", submitInviteByCode);
-router.get("/public/nps/:token", getPublicInvite);
-router.post("/public/nps/:token", respondPublicInvite);
+router.get("/public/forms/:publicId", publicOrg(Form as never, "publicId", "publicId"), getPublicForm);
+router.post("/public/forms/:publicId/responses", publicOrg(Form as never, "publicId", "publicId"), submitPublicForm);
+router.get("/public/form-invites/:code", publicOrg(FormInvite as never, "code", "code"), getInviteByCode);
+router.post("/public/form-invites/:code", publicOrg(FormInvite as never, "code", "code"), submitInviteByCode);
+router.get("/public/nps/:token", publicOrg(NPSInvite as never, "token", "token"), getPublicInvite);
+router.post("/public/nps/:token", publicOrg(NPSInvite as never, "token", "token"), respondPublicInvite);
 // Link público da proposta e rastreio de visualização.
-router.get("/public/proposals/:token", getPublicProposal);
-router.post("/public/proposals/:token/views", startProposalView);
-router.post("/public/proposals/:token/views/:viewId", beaconBody, heartbeatProposalView);
+router.get("/public/proposals/:token", publicOrg(ProposalLink as never, "token", "token"), getPublicProposal);
+router.post("/public/proposals/:token/views", publicOrg(ProposalLink as never, "token", "token"), startProposalView);
+router.post("/public/proposals/:token/views/:viewId", publicOrg(ProposalLink as never, "token", "token"), beaconBody, heartbeatProposalView);
 
 router.get("/google/callback", googleCallback);
 
@@ -180,11 +182,15 @@ router.post("/custom-fields", settingsAccess, createCustomField);
 router.patch("/custom-fields/:id", settingsAccess, updateCustomField);
 router.delete("/custom-fields/:id", settingsAccess, deleteCustomField);
 
-router.get("/users", listDocuments(User));
+router.get("/orgs", listOrgs);
+router.post("/orgs", createOrg);
+router.patch("/orgs/:id", updateOrg);
+
+router.get("/users", listUsers);
 router.post("/users", requireAdmin, createUser);
-router.get("/users/:id", getDocument(User));
+router.get("/users/:id", getUser);
 router.patch("/users/:id", requireAdmin, updateUser);
-router.delete("/users/:id", requireAdmin, deleteDocument(User));
+router.delete("/users/:id", requireAdmin, deleteUser);
 
 router.get("/companies", listCompanies);
 router.post("/companies", baseWrite, createCompany);

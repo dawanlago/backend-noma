@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 import type { ToolKey } from "../types";
 
 /** Documentos salvos das ferramentas (propostas, contratos, orçamentos e briefings). */
@@ -23,6 +24,8 @@ const ToolDocumentSchema = new Schema<IToolDocument>(
 );
 
 ToolDocumentSchema.index({ ownerId: 1, tool: 1, updatedAt: -1 });
+
+ToolDocumentSchema.plugin(tenantPlugin);
 
 const ToolDocument: Model<IToolDocument> =
   models.ToolDocument || model<IToolDocument>("ToolDocument", ToolDocumentSchema);

@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export interface IRecurringExpense extends Document {
   _id: Types.ObjectId;
@@ -33,6 +34,8 @@ const RecurringExpenseSchema = new Schema<IRecurringExpense>(
   },
   { timestamps: true },
 );
+
+RecurringExpenseSchema.plugin(tenantPlugin);
 
 const RecurringExpense: Model<IRecurringExpense> =
   models.RecurringExpense || model<IRecurringExpense>("RecurringExpense", RecurringExpenseSchema);

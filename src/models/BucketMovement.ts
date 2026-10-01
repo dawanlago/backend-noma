@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /**
  * Movimento de uma caixa de distribuição: entrada (parte de uma distribuição)
@@ -46,6 +47,8 @@ const BucketMovementSchema = new Schema<IBucketMovement>(
 BucketMovementSchema.index({ ownerId: 1, date: -1 });
 BucketMovementSchema.index({ groupId: 1 });
 BucketMovementSchema.index({ entryId: 1 });
+
+BucketMovementSchema.plugin(tenantPlugin);
 
 const BucketMovement: Model<IBucketMovement> =
   models.BucketMovement || model<IBucketMovement>("BucketMovement", BucketMovementSchema);

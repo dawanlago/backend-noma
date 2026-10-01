@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /** Pesquisa NPS: a pergunta de 0 a 10 que o cliente responde pelo link. */
 export interface INPSSurvey extends Document {
@@ -30,6 +31,8 @@ const NPSSurveySchema = new Schema<INPSSurvey>(
   },
   { timestamps: true },
 );
+
+NPSSurveySchema.plugin(tenantPlugin);
 
 const NPSSurvey: Model<INPSSurvey> = models.NPSSurvey || model<INPSSurvey>("NPSSurvey", NPSSurveySchema);
 

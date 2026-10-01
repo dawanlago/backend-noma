@@ -4,7 +4,7 @@ import { isValidObjectId, type Types } from "mongoose";
 import ProposalLink, { type IProposalLink } from "../models/ProposalLink";
 import ProposalView from "../models/ProposalView";
 import ToolDocument from "../models/ToolDocument";
-import { recordScope } from "../lib/ownership";
+import { recordScope, useModuleScope } from "../lib/ownership";
 import { hasModule } from "../lib/permissions";
 import {
   MAX_VIEWS_PER_HOUR,
@@ -33,6 +33,7 @@ async function ownedProposal(req: Request, res: Response) {
     res.status(403).json({ error: "Seu usuário não tem acesso a esta ferramenta." });
     return null;
   }
+  useModuleScope(req, TOOL_MODULES.proposal);
   const doc = isValidObjectId(req.params.id)
     ? await ToolDocument.findOne({ _id: req.params.id, tool: "proposal", ...recordScope(req) }).select("_id ownerId").lean()
     : null;

@@ -104,6 +104,10 @@ export const EXPENSE_CATEGORIES = [
 
 export const PAYMENT_METHODS = ["Pix", "Transferência", "Cartão", "Dinheiro", "Boleto", "Outro"] as const;
 
+/** Até onde o usuário enxerga num módulo: nada, só o que criou, ou tudo da empresa. */
+export const ACCESS_LEVELS = ["none", "own", "all"] as const;
+export type AccessLevel = (typeof ACCESS_LEVELS)[number];
+
 export const CUSTOM_FIELD_ENTITIES = ["lead", "contact", "company", "prospecting"] as const;
 export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
 export const CUSTOM_FIELD_TYPES = ["text", "textarea", "number", "date", "select", "multiselect"] as const;

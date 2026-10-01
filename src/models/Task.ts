@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export type TaskStatus = "todo" | "doing" | "done";
 
@@ -56,6 +57,8 @@ TaskSchema.pre("save", function syncStatus() {
 
 TaskSchema.index({ ownerId: 1, done: 1, dueDate: 1 });
 TaskSchema.index({ leadId: 1 });
+
+TaskSchema.plugin(tenantPlugin);
 
 const Task: Model<ITask> = models.Task || model<ITask>("Task", TaskSchema);
 

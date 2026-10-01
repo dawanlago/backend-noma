@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /** Grupo (pasta) de anotações de um usuário. */
 export interface INoteGroup extends Document {
@@ -22,6 +23,8 @@ const NoteGroupSchema = new Schema<INoteGroup>(
 );
 
 NoteGroupSchema.index({ ownerId: 1, order: 1 });
+
+NoteGroupSchema.plugin(tenantPlugin);
 
 const NoteGroup: Model<INoteGroup> = models.NoteGroup || model<INoteGroup>("NoteGroup", NoteGroupSchema);
 

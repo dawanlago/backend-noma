@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export interface IMonthlyGoal extends Document {
   _id: Types.ObjectId;
@@ -20,6 +21,8 @@ const MonthlyGoalSchema = new Schema<IMonthlyGoal>(
 );
 
 MonthlyGoalSchema.index({ ownerId: 1, month: 1, cashbox: 1 }, { unique: true });
+
+MonthlyGoalSchema.plugin(tenantPlugin);
 
 const MonthlyGoal: Model<IMonthlyGoal> =
   models.MonthlyGoal || model<IMonthlyGoal>("MonthlyGoal", MonthlyGoalSchema);

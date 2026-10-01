@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import ToolDocument from "../models/ToolDocument";
 import { hasModule } from "../lib/permissions";
-import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
+import { ownerScope, recordScope, useModuleScope, withOwnerNames } from "../lib/ownership";
 import { TOOL_MODULES, type ToolKey } from "../types";
 import { removeProposalShare, shareSummaries } from "./proposalLink.controller";
 
@@ -17,6 +17,7 @@ function toolParam(req: Request, res: Response): ToolKey | null {
     res.status(403).json({ error: "Seu usuário não tem acesso a esta ferramenta." });
     return null;
   }
+  useModuleScope(req, TOOL_MODULES[tool]);
   return tool;
 }
 

@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { orgFilter } from "../lib/tenant";
 import OptionItem from "../models/OptionItem";
 import { isValidList, KEYED_LISTS, slugify, uniqueValue } from "../lib/optionLists";
 
@@ -92,7 +93,7 @@ export async function reorderOptions(req: Request, res: Response, next: NextFunc
       return;
     }
     await OptionItem.bulkWrite(
-      ids.map((id, order) => ({ updateOne: { filter: { _id: String(id), list }, update: { $set: { order } } } })),
+      ids.map((id, order) => ({ updateOne: { filter: { _id: String(id), list, ...orgFilter() }, update: { $set: { order } } } })),
     );
     res.status(204).send();
   } catch (error) {

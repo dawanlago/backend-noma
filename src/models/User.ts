@@ -1,6 +1,14 @@
 import bcrypt from "bcryptjs";
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
-import type { UserRole } from "../types";
+import type { AccessLevel, UserRole } from "../types";
+
+/** Acesso do usuário a uma empresa: papel e, por módulo, até onde ele enxerga. */
+export interface IMembership {
+  orgId: Types.ObjectId;
+  role: UserRole;
+  /** módulo → "none" | "own" (só o que criou) | "all" (tudo da empresa). O admin tem "all" em tudo. */
+  access: Record<string, AccessLevel>;
+}
 
 export interface IUser extends Document {
   _id: Types.ObjectId;
@@ -12,6 +20,10 @@ export interface IUser extends Document {
   isActive: boolean;
   /** Módulos liberados (vazio = padrão do papel). O admin sempre tem todos. */
   permissions: string[];
+  /** Empresas a que o usuário tem acesso. */
+  memberships: IMembership[];
+  /** Administrador geral: cria empresas e é admin em todas. */
+  isSuperAdmin: boolean;
   /** Google Agenda conectado (o refresh token fica criptografado e fora das consultas). */
   googleEmail?: string;
   googleRefreshToken?: string;
@@ -43,6 +55,20 @@ const UserSchema = new Schema<IUser>(
     avatarUrl: { type: String },
     isActive: { type: Boolean, default: true },
     permissions: { type: [String], default: [] },
+    memberships: {
+      type: [
+        new Schema<IMembership>(
+          {
+            orgId: { type: Schema.Types.ObjectId, ref: "Organization", required: true },
+            role: { type: String, enum: ["admin", "manager", "seller"], default: "seller" },
+            access: { type: Schema.Types.Mixed, default: {} },
+          },
+          { _id: false, minimize: false },
+        ),
+      ],
+      default: [],
+    },
+    isSuperAdmin: { type: Boolean, default: false },
     googleEmail: { type: String, default: "" },
     googleRefreshToken: { type: String, select: false },
     googleConnectedAt: { type: Date },

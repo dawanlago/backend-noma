@@ -6,7 +6,7 @@ import { upcomingBirthdays } from "../lib/birthdays";
 import Task from "../models/Task";
 import ToolDocument from "../models/ToolDocument";
 import { hasModule } from "../lib/permissions";
-import { ownerScope } from "../lib/ownership";
+import { ownerScope, ownerScopeFor } from "../lib/ownership";
 
 export async function getDashboard(req: Request, res: Response, next: NextFunction) {
   try {
@@ -14,9 +14,10 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
     const month = new Date().toISOString().slice(0, 7);
     const canSeeFinance = hasModule(req.user!, "financeiro");
     const [leads, entries, documents, tasks, people] = await Promise.all([
-      Lead.find(scope).select("status value nextActionDate").lean(),
+      // Cada bloco respeita o alcance do usuário no seu módulo.
+      Lead.find(ownerScopeFor(req, "crm")).select("status value nextActionDate").lean(),
       canSeeFinance
-        ? FinanceEntry.find({ ...scope, date: { $regex: `^${month}-` } }).select("type status value").lean()
+        ? FinanceEntry.find({ ...ownerScopeFor(req, "financeiro"), date: { $regex: `^${month}-` } }).select("type status value").lean()
         : Promise.resolve([]),
       ToolDocument.aggregate<{ _id: string; count: number }>([
         { $match: scope },

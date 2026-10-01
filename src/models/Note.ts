@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export interface INoteShare {
   userId: Types.ObjectId;
@@ -32,6 +33,8 @@ const NoteSchema = new Schema<INote>(
 
 NoteSchema.index({ ownerId: 1, groupId: 1, order: 1 });
 NoteSchema.index({ "shares.userId": 1 });
+
+NoteSchema.plugin(tenantPlugin);
 
 const Note: Model<INote> = models.Note || model<INote>("Note", NoteSchema);
 

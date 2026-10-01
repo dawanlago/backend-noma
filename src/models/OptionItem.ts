@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /**
  * Item de uma lista de opções configurável (serviços, nichos, categorias...).
@@ -29,8 +30,10 @@ const OptionItemSchema = new Schema<IOptionItem>(
   { timestamps: true, minimize: false },
 );
 
-OptionItemSchema.index({ list: 1, value: 1 }, { unique: true });
+OptionItemSchema.index({ orgId: 1, list: 1, value: 1 }, { unique: true });
 OptionItemSchema.index({ list: 1, order: 1 });
+
+OptionItemSchema.plugin(tenantPlugin);
 
 const OptionItem: Model<IOptionItem> =
   models.OptionItem || model<IOptionItem>("OptionItem", OptionItemSchema);

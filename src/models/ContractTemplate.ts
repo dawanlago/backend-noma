@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /**
  * Modelo de contrato da produtora. O texto usa {{variáveis}} preenchidas
@@ -21,6 +22,8 @@ const ContractTemplateSchema = new Schema<IContractTemplate>(
   },
   { timestamps: true },
 );
+
+ContractTemplateSchema.plugin(tenantPlugin);
 
 const ContractTemplate: Model<IContractTemplate> =
   models.ContractTemplate || model<IContractTemplate>("ContractTemplate", ContractTemplateSchema);

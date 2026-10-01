@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { orgFilter } from "../lib/tenant";
 import Funnel from "../models/Funnel";
 import Form from "../models/Form";
 import Lead from "../models/Lead";
@@ -37,7 +38,7 @@ export async function reorderFunnels(req: Request, res: Response, next: NextFunc
       res.status(400).json({ error: "Ordem inválida." });
       return;
     }
-    await Funnel.bulkWrite(ids.map((id, order) => ({ updateOne: { filter: { _id: String(id) }, update: { $set: { order } } } })));
+    await Funnel.bulkWrite(ids.map((id, order) => ({ updateOne: { filter: { _id: String(id), ...orgFilter() }, update: { $set: { order } } } })));
     res.status(204).send();
   } catch (error) {
     next(error);

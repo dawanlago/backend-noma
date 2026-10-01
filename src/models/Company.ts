@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 export interface ICompany extends Document {
   _id: Types.ObjectId;
@@ -49,6 +50,8 @@ const CompanySchema = new Schema<ICompany>(
 );
 
 CompanySchema.index({ kinds: 1 });
+
+CompanySchema.plugin(tenantPlugin);
 
 const Company: Model<ICompany> =
   models.Company || model<ICompany>("Company", CompanySchema);

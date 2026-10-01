@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /** Sessão de visualização do link público de uma proposta (uma por aba aberta). */
 export interface IProposalView extends Document {
@@ -32,6 +33,8 @@ const ProposalViewSchema = new Schema<IProposalView>({
 
 ProposalViewSchema.index({ documentId: 1, openedAt: -1 });
 ProposalViewSchema.index({ linkId: 1, openedAt: -1 });
+
+ProposalViewSchema.plugin(tenantPlugin);
 
 const ProposalView: Model<IProposalView> =
   models.ProposalView || model<IProposalView>("ProposalView", ProposalViewSchema);

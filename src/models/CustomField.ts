@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 import { CUSTOM_FIELD_ENTITIES, CUSTOM_FIELD_TYPES, type CustomFieldEntity, type CustomFieldType } from "../types";
 
 /** Campo extra criado nas configurações. As opções ficam na lista `field:<id>`. */
@@ -24,7 +25,9 @@ const CustomFieldSchema = new Schema<ICustomField>(
   { timestamps: true },
 );
 
-CustomFieldSchema.index({ entity: 1, key: 1 }, { unique: true });
+CustomFieldSchema.index({ orgId: 1, entity: 1, key: 1 }, { unique: true });
+
+CustomFieldSchema.plugin(tenantPlugin);
 
 const CustomField: Model<ICustomField> =
   models.CustomField || model<ICustomField>("CustomField", CustomFieldSchema);

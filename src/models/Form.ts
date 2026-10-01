@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 import { FORM_FIELD_TARGETS, FORM_FIELD_TYPES, type FormFieldTarget, type FormFieldType } from "../types";
 
 export interface IFormField {
@@ -62,6 +63,8 @@ const FormSchema = new Schema<IForm>(
   },
   { timestamps: true },
 );
+
+FormSchema.plugin(tenantPlugin);
 
 const Form: Model<IForm> = models.Form || model<IForm>("Form", FormSchema);
 

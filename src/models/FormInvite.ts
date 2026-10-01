@@ -1,4 +1,5 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
+import { tenantPlugin } from "../lib/tenant";
 
 /**
  * Formulário enviado dentro de uma negociação: link com código de 6 dígitos,
@@ -35,6 +36,8 @@ const FormInviteSchema = new Schema<IFormInvite>(
 );
 
 FormInviteSchema.index({ leadId: 1, formId: 1 }, { unique: true });
+
+FormInviteSchema.plugin(tenantPlugin);
 
 const FormInvite: Model<IFormInvite> = models.FormInvite || model<IFormInvite>("FormInvite", FormInviteSchema);
 
