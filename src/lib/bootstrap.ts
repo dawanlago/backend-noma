@@ -4,6 +4,7 @@ import Organization from "../models/Organization";
 import { ensurePrimaryOrganization, migrateToOrganizations } from "./organizations";
 import { migrateDealsAndProducts } from "./dealMigrations";
 import { migrateContacts } from "./contactMigrations";
+import { migrateNoteShares } from "./noteMigrations";
 import { seedAdminUser } from "./seedAdmin";
 import { runWithOrg } from "./tenant";
 import {
@@ -46,6 +47,10 @@ export function bootstrapApp() {
       // Contatos de antes: telefone normalizado (duplicados) e lista de empresas vinculadas.
       for (const org of [primary, ...others]) {
         await runWithOrg(org._id, migrateContacts).catch((error) => console.error("[migracao:contact-links-v1]", error));
+      }
+      // Anotações compartilhadas de antes: viram "só visualizar".
+      for (const org of [primary, ...others]) {
+        await runWithOrg(org._id, migrateNoteShares).catch((error) => console.error("[migracao:note-share-permission-v1]", error));
       }
       // Remove o índice único antigo de CNPJ: agora ele é opcional.
       await Company.syncIndexes();

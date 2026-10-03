@@ -18,6 +18,12 @@ export interface IFinanceEntry extends Document {
   /** Banco/conta de onde saiu ou para onde entrou. */
   bank: string;
   notes: string;
+  /** Data em que foi de fato recebida/paga (YYYY-MM-DD); `date` é o vencimento. */
+  paidAt?: string;
+  /** Juros/multa de uma entrada recebida depois do vencimento (somam no recebido). */
+  lateCharge?: { days: number; fee: number; interest: number; total: number };
+  /** Atraso perdoado: recebida depois do vencimento sem cobrar juros/multa. */
+  lateChargeWaived: boolean;
   /** Parcela de uma venda dividida (ex.: 2 de 3). */
   installment?: { number: number; total: number };
   recurringId?: Types.ObjectId;
@@ -43,6 +49,15 @@ const FinanceEntrySchema = new Schema<IFinanceEntry>(
     cashbox: { type: String, trim: true, default: "" },
     bank: { type: String, trim: true, default: "" },
     notes: { type: String, default: "" },
+    paidAt: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ },
+    lateCharge: {
+      type: new Schema(
+        { days: { type: Number, min: 0 }, fee: { type: Number, min: 0 }, interest: { type: Number, min: 0 }, total: { type: Number, min: 0 } },
+        { _id: false },
+      ),
+      default: undefined,
+    },
+    lateChargeWaived: { type: Boolean, default: false },
     installment: {
       type: new Schema({ number: { type: Number, min: 1 }, total: { type: Number, min: 1 } }, { _id: false }),
       default: undefined,

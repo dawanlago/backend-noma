@@ -2,7 +2,7 @@ import { Schema, models, model, type Document, type Model, type Types } from "mo
 import { tenantPlugin } from "../lib/tenant";
 import type { ToolKey } from "../types";
 
-/** Documentos salvos das ferramentas (propostas, contratos, orçamentos e briefings). */
+/** Documentos salvos das ferramentas (propostas, contratos, orçamentos, briefings e roteiros). */
 export interface IToolDocument extends Document {
   _id: Types.ObjectId;
   ownerId: Types.ObjectId;
@@ -16,7 +16,7 @@ export interface IToolDocument extends Document {
 const ToolDocumentSchema = new Schema<IToolDocument>(
   {
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    tool: { type: String, enum: ["proposal", "contract", "budget", "briefing"], required: true },
+    tool: { type: String, enum: ["proposal", "contract", "budget", "briefing", "script"], required: true },
     title: { type: String, trim: true, default: "Sem título" },
     data: { type: Schema.Types.Mixed, default: {} },
   },

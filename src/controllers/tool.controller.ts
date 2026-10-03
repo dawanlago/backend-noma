@@ -5,7 +5,7 @@ import { ownerScope, recordScope, useModuleScope, withOwnerNames } from "../lib/
 import { TOOL_MODULES, type ToolKey } from "../types";
 import { removeProposalShare, shareSummaries } from "./proposalLink.controller";
 
-const TOOLS: ToolKey[] = ["proposal", "contract", "budget", "briefing"];
+const TOOLS: ToolKey[] = ["proposal", "contract", "budget", "briefing", "script"];
 
 function toolParam(req: Request, res: Response): ToolKey | null {
   const tool = req.params.tool as ToolKey;
@@ -26,7 +26,10 @@ export async function listToolDocuments(req: Request, res: Response, next: NextF
     const tool = toolParam(req, res);
     if (!tool) return;
     // A listagem não traz `data`: propostas podem carregar imagens pesadas.
-    const docs = await ToolDocument.find({ tool, ...ownerScope(req) })
+    // Roteiros de um briefing: ?briefingId=
+    const briefingId = tool === "script" && typeof req.query.briefingId === "string" ? req.query.briefingId : "";
+    const byBriefing = /^[a-f0-9]{24}$/.test(briefingId) ? { "data.briefingId": briefingId } : {};
+    const docs = await ToolDocument.find({ tool, ...ownerScope(req), ...byBriefing })
       .select("-data")
       .sort({ updatedAt: -1 })
       .lean();

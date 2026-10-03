@@ -6,13 +6,21 @@ import User from "../models/User";
 import { open, seal } from "./secretBox";
 
 // Integração com o Google Agenda: cada usuário conecta a própria conta e os compromissos
-// com data e hora que ele cria no Noma viram eventos na agenda principal dele (só Noma → Google).
+// com data e hora que ele cria no Noma viram eventos na agenda principal dele, e o Noma lê os
+// horários ocupados dela (free/busy) para o agendamento externo.
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
-export const GOOGLE_SCOPES = ["openid", "email", "https://www.googleapis.com/auth/calendar.events"];
+export const GOOGLE_SCOPES = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/calendar.events",
+  // Horários ocupados (agendamento externo e "ver a agenda" ao marcar compromisso).
+  "https://www.googleapis.com/auth/calendar.freebusy",
+];
+const FREEBUSY_URL = "https://www.googleapis.com/calendar/v3/freeBusy";
 export const TIME_ZONE = "America/Sao_Paulo";
 
 export class GoogleAuthRevoked extends Error {}
@@ -195,4 +203,38 @@ export async function syncUpcoming(userId: string, today: string) {
   const tasks = await Task.find({ ownerId: userId, dueDate: { $gte: today }, time: { $ne: "" }, done: false }).limit(200);
   for (const task of tasks) await syncTask(task);
   return tasks.length;
+}
+
+export interface BusyResult {
+  /** Intervalos ocupados no Google (ms UTC). */
+  intervals: { start: number; end: number }[];
+  /** "ok" | "not_connected" (sem Google) | "reconnect" (falta permissão: conectar de novo) | "error". */
+  status: "ok" | "not_connected" | "reconnect" | "error";
+}
+
+/** Horários ocupados na agenda principal do usuário no Google entre `from` e `to`. */
+export async function googleBusy(userId: string, from: Date, to: Date): Promise<BusyResult> {
+  if (!googleConfigured()) return { intervals: [], status: "not_connected" };
+  let token: string | null = null;
+  try {
+    token = await accessToken(userId);
+  } catch {
+    return { intervals: [], status: "reconnect" };
+  }
+  if (!token) return { intervals: [], status: "not_connected" };
+  try {
+    const response = await fetch(FREEBUSY_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ timeMin: from.toISOString(), timeMax: to.toISOString(), timeZone: TIME_ZONE, items: [{ id: "primary" }] }),
+    });
+    // Conectado antes da permissão de horários ocupados: precisa conectar de novo.
+    if (response.status === 403 || response.status === 401) return { intervals: [], status: "reconnect" };
+    const json = (await response.json().catch(() => ({}))) as { calendars?: Record<string, { busy?: { start: string; end: string }[] }> };
+    if (!response.ok) return { intervals: [], status: "error" };
+    const busy = json.calendars?.primary?.busy || [];
+    return { intervals: busy.map((item) => ({ start: Date.parse(item.start), end: Date.parse(item.end) })), status: "ok" };
+  } catch {
+    return { intervals: [], status: "error" };
+  }
 }

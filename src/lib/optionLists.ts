@@ -97,6 +97,8 @@ export const OPTION_LIST_DEFAULTS: Record<string, DefaultOption[]> = {
   briefingChannel: labels(["Instagram", "Instagram + TikTok", "YouTube", "Site/institucional", "Outro"]),
   briefingRevisions: labels(["1", "2", "3", "A definir"]),
   briefingStyle: labels(["Clean", "Lifestyle", "Comercial", "Premium", "A definir"]),
+  // Campos extras do briefing: meta = { type: text|textarea|select|date, template: tipo do briefing ou "" (todos), options: string[] }
+  briefingField: [],
   taskType: [
     { value: "meeting", label: "Reunião" },
     { value: "call", label: "Ligação" },

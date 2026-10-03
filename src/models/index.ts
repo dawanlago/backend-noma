@@ -26,7 +26,11 @@ export { default as NPSRating } from "./NPSRating";
 export { default as FormInvite } from "./FormInvite";
 export { default as ProposalLink } from "./ProposalLink";
 export { default as ProposalView } from "./ProposalView";
+export { default as ProposalEvent } from "./ProposalEvent";
 export { default as DistributionBucket } from "./DistributionBucket";
+export { default as SchedulingLink } from "./SchedulingLink";
+export { default as Booking } from "./Booking";
+export { default as Notification } from "./Notification";
 export { default as BucketMovement } from "./BucketMovement";
 
 export type { IUser } from "./User";

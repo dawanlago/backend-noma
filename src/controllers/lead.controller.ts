@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { notify } from "../lib/notifications";
 import { isValidObjectId, Types } from "mongoose";
 import Company from "../models/Company";
 import Contact from "../models/Contact";
@@ -147,6 +148,9 @@ async function changeOwner(req: Request, lead: ILead): Promise<{ status: number;
   if (!user) return { status: 400, error: "Usuário não encontrado nesta empresa." };
   lead.ownerId = user._id;
   lead.history.push({ at: new Date(), text: `Responsável alterado para ${user.name}`, userName: req.user!.name });
+  if (String(user._id) !== String(req.user!._id)) {
+    await notify([user._id], { type: "lead_assigned", title: `Você é o responsável por "${lead.name}"`, body: `Passada por ${req.user!.name}.`, link: `/crm/${lead._id}` });
+  }
   return null;
 }
 

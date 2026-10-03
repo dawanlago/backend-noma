@@ -26,6 +26,7 @@ export const DATA_MIGRATIONS = [
   "contact-links-v1",
   "lead-created-by-v1",
   "product-costs-v1",
+  "note-share-permission-v1",
 ];
 
 /** Carimba com a empresa todo registro que ainda não tem uma (dados de antes da separação). */

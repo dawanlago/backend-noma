@@ -1,7 +1,7 @@
 export type UserRole = "admin" | "manager" | "seller";
 export type TransactionType = "income" | "expense";
 export type FinanceStatus = "received" | "pending" | "paid" | "planned";
-export type ToolKey = "proposal" | "contract" | "budget" | "briefing";
+export type ToolKey = "proposal" | "contract" | "budget" | "briefing" | "script";
 
 /** Áreas do sistema que podem ser liberadas por usuário. */
 export const MODULES = [
@@ -53,6 +53,8 @@ export const TOOL_MODULES: Record<ToolKey, ModuleKey> = {
   contract: "contratos",
   budget: "orcamento",
   briefing: "briefing",
+  // Roteiros seguem as permissões do briefing.
+  script: "briefing",
 };
 
 /** Etapas do antigo funil fixo; usadas para migrar os leads para o funil padrão. */
@@ -123,6 +125,8 @@ export const FORM_FIELD_TYPES = [
   "select",
   "multiselect",
   "checkbox",
+  /** A data do evento: calcula a antecedência e confere a regra de disponibilidade do formulário. */
+  "eventDate",
 ] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 

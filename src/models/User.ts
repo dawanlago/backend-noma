@@ -28,6 +28,17 @@ export interface IUser extends Document {
   googleEmail?: string;
   googleRefreshToken?: string;
   googleConnectedAt?: Date;
+  /** Preferências de avisos (valem em todas as empresas). */
+  notificationPrefs: {
+    /** Minutos antes do compromisso com hora para avisar (0 = não avisar). */
+    reminderMinutes: number;
+    /** Também mandar lembretes por e-mail. */
+    emailReminders: boolean;
+    /** Resumo diário de manhã com atividades do dia e atrasadas. */
+    dailyDigest: boolean;
+  };
+  /** Último resumo diário enviado (YYYY-MM-DD). */
+  lastDigestDate?: string;
   /** Redefinição de senha: hash do código enviado por e-mail e validade. */
   resetTokenHash?: string;
   resetTokenExpiresAt?: Date;
@@ -72,6 +83,12 @@ const UserSchema = new Schema<IUser>(
     googleEmail: { type: String, default: "" },
     googleRefreshToken: { type: String, select: false },
     googleConnectedAt: { type: Date },
+    notificationPrefs: {
+      reminderMinutes: { type: Number, min: 0, max: 7 * 24 * 60, default: 60 },
+      emailReminders: { type: Boolean, default: true },
+      dailyDigest: { type: Boolean, default: true },
+    },
+    lastDigestDate: { type: String, default: "" },
     resetTokenHash: { type: String, select: false },
     resetTokenExpiresAt: { type: Date, select: false },
   },

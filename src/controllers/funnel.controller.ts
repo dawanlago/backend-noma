@@ -5,6 +5,12 @@ import Form from "../models/Form";
 import Lead from "../models/Lead";
 import { firstOpenStage, normalizeStages, removedStageIds } from "../lib/funnels";
 
+/** Etapa escolhida para "formulário de contato existente": precisa existir no funil. */
+function qualifiedStageFor(raw: unknown, stages: { _id: unknown }[]) {
+  const id = typeof raw === "string" ? raw : "";
+  return id && stages.some((stage) => String(stage._id) === id) ? id : undefined;
+}
+
 export async function listFunnels(_req: Request, res: Response, next: NextFunction) {
   try {
     const data = await Funnel.find().sort({ order: 1, createdAt: 1 }).lean();
@@ -23,7 +29,12 @@ export async function createFunnel(req: Request, res: Response, next: NextFuncti
       return;
     }
     const last = await Funnel.findOne().sort({ order: -1 }).select("order").lean();
-    const doc = await Funnel.create({ name, stages, order: (last?.order ?? -1) + 1 });
+    const doc = await Funnel.create({
+      name,
+      stages,
+      order: (last?.order ?? -1) + 1,
+      qualifiedStageId: qualifiedStageFor(req.body.qualifiedStageId, stages),
+    });
     res.status(201).json({ data: doc.toJSON() });
   } catch (error) {
     next(error);
@@ -55,6 +66,11 @@ export async function updateFunnel(req: Request, res: Response, next: NextFuncti
     }
     if (typeof req.body.name === "string" && req.body.name.trim()) doc.name = req.body.name.trim();
     if (typeof req.body.order === "number") doc.order = req.body.order;
+    if (req.body.qualifiedStageId !== undefined) {
+      // Conferido de novo depois de gravar as etapas (abaixo), caso a etapa tenha sido removida.
+      const known = [...doc.stages, ...(Array.isArray(req.body.stages) ? (req.body.stages as { _id: unknown }[]) : [])];
+      doc.set("qualifiedStageId", qualifiedStageFor(req.body.qualifiedStageId, known));
+    }
     if (req.body.stages !== undefined) {
       const previous = doc.stages.map((stage) => ({
         _id: stage._id,
@@ -69,6 +85,8 @@ export async function updateFunnel(req: Request, res: Response, next: NextFuncti
       }
       const removed = removedStageIds(previous, stages);
       doc.set("stages", stages);
+      // Etapa removida deixa de ser a de "formulário de contato existente".
+      if (doc.qualifiedStageId && !qualifiedStageFor(String(doc.qualifiedStageId), stages)) doc.set("qualifiedStageId", undefined);
       await doc.save();
       const target = firstOpenStage(stages)!;
       if (removed.length) {

@@ -70,6 +70,9 @@ export interface ILead extends Document {
   closedValue?: number;
   /** Último contato com o cliente: parecer registrado ou atividade concluída. */
   lastContactAt?: Date;
+  /** Data do evento (YYYY-MM-DD) vinda do formulário e se ela caiu na regra de indisponibilidade. */
+  eventDate?: string;
+  eventUnavailable?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -133,6 +136,8 @@ const LeadSchema = new Schema<ILead>(
     subStageId: { type: Schema.Types.ObjectId },
     subStageEnteredAt: { type: Date },
     lastContactAt: { type: Date },
+    eventDate: { type: String, trim: true },
+    eventUnavailable: { type: Boolean },
     offeredValue: { type: Number, min: 0 },
     closedValue: { type: Number, min: 0 },
   },

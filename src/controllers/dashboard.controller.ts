@@ -7,6 +7,7 @@ import Task from "../models/Task";
 import ToolDocument from "../models/ToolDocument";
 import { hasModule } from "../lib/permissions";
 import { ownerScope, ownerScopeFor } from "../lib/ownership";
+import { entryTotal } from "../lib/lateCharge";
 
 export async function getDashboard(req: Request, res: Response, next: NextFunction) {
   try {
@@ -17,7 +18,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
       // Cada bloco respeita o alcance do usuário no seu módulo.
       Lead.find(ownerScopeFor(req, "crm")).select("status value nextActionDate").lean(),
       canSeeFinance
-        ? FinanceEntry.find({ ...ownerScopeFor(req, "financeiro"), date: { $regex: `^${month}-` } }).select("type status value").lean()
+        ? FinanceEntry.find({ ...ownerScopeFor(req, "financeiro"), date: { $regex: `^${month}-` } }).select("type status value lateCharge").lean()
         : Promise.resolve([]),
       ToolDocument.aggregate<{ _id: string; count: number }>([
         { $match: scope },
@@ -29,7 +30,7 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
     ]);
 
     const sum = (filter: (entry: (typeof entries)[number]) => boolean) =>
-      entries.filter(filter).reduce((total, entry) => total + entry.value, 0);
+      entries.filter(filter).reduce((total, entry) => total + entryTotal(entry), 0);
     const received = sum((e) => e.type === "income" && e.status === "received");
     const expenses = sum((e) => e.type === "expense" && e.status === "paid");
     const today = new Date().toISOString().slice(0, 10);

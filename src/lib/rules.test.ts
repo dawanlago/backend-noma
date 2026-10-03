@@ -3,7 +3,16 @@ import { describe, expect, it } from "vitest";
 import { effectivePermissions, hasModule, sanitizePermissions } from "./permissions";
 import { defaultItems, isValidList, KEYED_LISTS, slugify, uniqueValue } from "./optionLists";
 import { firstOpenStage, firstStageOfKind, normalizeStages, removedStageIds } from "./funnels";
-import { contactFromAnswers, normalizeFormFields, validateAnswers } from "./forms";
+import {
+  contactFromAnswers,
+  eventInfo,
+  isValidEmail,
+  isValidPhone,
+  normalizeAvailability,
+  normalizeFormFields,
+  qualifiedStage,
+  validateAnswers,
+} from "./forms";
 import { legacyLeadPatch } from "./leadMigration";
 import { npsGroup, npsScore } from "./nps";
 import { upcomingBirthdays } from "./birthdays";
@@ -90,6 +99,54 @@ describe("formulários", () => {
     expect(ok.error).toBe("");
     expect(ok.answers.servico).toEqual(["Reels"]);
     expect(contactFromAnswers(fields, ok.answers)).toMatchObject({ name: "Ana", email: "ana@x.com" });
+  });
+
+  it("valida formato de e-mail e telefone brasileiro", () => {
+    expect(isValidEmail("ana@x.com")).toBe(true);
+    expect(isValidEmail("ana@x")).toBe(false);
+    expect(isValidEmail("ana x@y.com")).toBe(false);
+    for (const phone of ["(11) 98888-7777", "11988887777", "+55 11 98888-7777", "5511988887777", "(21) 3333-4444", "552133334444"]) {
+      expect(isValidPhone(phone), phone).toBe(true);
+    }
+    for (const phone of ["98888-7777", "(11) 8888-777", "119888877776", "(01) 98888-7777", "(11) 88888-7777", "abc"]) {
+      expect(isValidPhone(phone), phone).toBe(false);
+    }
+    const withPhone = normalizeFormFields([{ label: "Telefone", type: "phone" }, { label: "E-mail", type: "email" }]);
+    expect(validateAnswers(withPhone, { telefone: "1234" }).error).toContain("telefone");
+    expect(validateAnswers(withPhone, { telefone: "+55 (11) 98888-7777" }).error).toBe("");
+    expect(validateAnswers(withPhone, { e_mail: "a@b" }).error).toContain("e-mail");
+  });
+
+  it("progresso parcial ignora obrigatórios mas valida o que veio", () => {
+    expect(validateAnswers(fields, {}, { partial: true }).error).toBe("");
+    expect(validateAnswers(fields, { e_mail: "x" }, { partial: true }).error).toContain("e-mail");
+  });
+
+  it("data do evento: antecedência mínima e datas bloqueadas", () => {
+    const eventFields = normalizeFormFields([{ label: "Data do evento", type: "eventDate" }]);
+    const rule = normalizeAvailability({ minNoticeDays: "15", blockedDates: [{ from: "2026-12-31", to: "2026-12-24" }, { from: "x" }], message: " Sem agenda " });
+    expect(rule).toEqual({ minNoticeDays: 15, blockedDates: [{ from: "2026-12-24", to: "2026-12-31" }], message: "Sem agenda" });
+    const at = (date: string) => eventInfo(eventFields, { data_do_evento: date }, rule, "2026-10-01");
+    expect(at("2026-10-11")).toEqual({ eventDate: "2026-10-11", daysUntilEvent: 10, unavailable: true });
+    expect(at("2026-10-16")).toEqual({ eventDate: "2026-10-16", daysUntilEvent: 15, unavailable: false });
+    expect(at("2026-12-25")?.unavailable).toBe(true);
+    expect(at("2027-01-01")?.unavailable).toBe(false);
+    expect(at("2026-09-30")?.unavailable).toBe(true);
+    expect(eventInfo(eventFields, {}, rule)).toBeNull();
+    expect(validateAnswers(eventFields, { data_do_evento: "2026-02-30" }).error).toContain("data válida");
+  });
+
+  it("etapa ao receber formulário de contato existente", () => {
+    const stages = [
+      { _id: "a", name: "Novo lead", kind: "open" },
+      { _id: "b", name: "Não qualificado", kind: "open" },
+      { _id: "c", name: "Lead Qualificado", kind: "open" },
+      { _id: "d", name: "Proposta", kind: "open" },
+    ];
+    expect(qualifiedStage(stages)?._id).toBe("c");
+    expect(qualifiedStage(stages, "d")?._id).toBe("d");
+    expect(qualifiedStage(stages, "sumiu")?._id).toBe("c");
+    expect(qualifiedStage([{ _id: "a", name: "Novo", kind: "open" }])).toBeUndefined();
   });
 });
 

@@ -24,6 +24,15 @@ export function runWithOrg<T>(orgId: Types.ObjectId | string, fn: () => T): T {
   return storage.run({ orgId: String(orgId) }, fn);
 }
 
+/**
+ * Executa `fn` sem filtro de empresa. Só para dados que são da pessoa e não da empresa
+ * (ex.: a agenda de alguém que trabalha em várias empresas).
+ */
+export function acrossOrgs<T>(fn: () => Promise<T>): Promise<T> {
+  // A consulta precisa ser executada (exec) aqui dentro: os hooks rodam na execução, não na montagem.
+  return storage.exit(fn);
+}
+
 /** Filtro da empresa atual, para operações que não passam pelos hooks (ex.: bulkWrite). */
 export function orgFilter(): { orgId?: Types.ObjectId } {
   const orgId = currentOrgId();

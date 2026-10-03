@@ -12,6 +12,10 @@ export interface IProposalLink extends Document {
   viewsCount: number;
   firstViewedAt?: Date;
   lastViewedAt?: Date;
+  /** Aceite do cliente pelo link (uma vez por link; gerar um novo link libera de novo). */
+  acceptedAt?: Date;
+  acceptedName?: string;
+  acceptedComment?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +29,9 @@ const ProposalLinkSchema = new Schema<IProposalLink>(
     viewsCount: { type: Number, default: 0 },
     firstViewedAt: { type: Date },
     lastViewedAt: { type: Date },
+    acceptedAt: { type: Date },
+    acceptedName: { type: String, trim: true },
+    acceptedComment: { type: String, trim: true },
   },
   { timestamps: true },
 );

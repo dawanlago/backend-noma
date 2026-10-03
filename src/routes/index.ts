@@ -78,6 +78,9 @@ import {
   submitInviteByCode,
   listResponses,
   submitPublicForm,
+  getPublicProgress,
+  saveInviteProgress,
+  savePublicProgress,
   updateForm,
 } from "../controllers/form.controller";
 import { deleteFile, listFiles, registerFile, updateFile } from "../controllers/file.controller";
@@ -125,6 +128,7 @@ import {
   getPublicProposal,
   heartbeatProposalView,
   startProposalView,
+  acceptPublicProposal,
 } from "../controllers/proposalLink.controller";
 import {
   createDistribution,
@@ -133,6 +137,20 @@ import {
   getDistribution,
   saveBuckets,
 } from "../controllers/distribution.controller";
+import {
+  bookPublicSlot,
+  cancelBooking,
+  createLink as createSchedulingLink,
+  deleteLink as deleteSchedulingLink,
+  getPublicSchedule,
+  listBookings,
+  listLinks as listSchedulingLinks,
+  myBusy,
+  updateLink as updateSchedulingLink,
+} from "../controllers/scheduling.controller";
+import SchedulingLink from "../models/SchedulingLink";
+import { cronTick, testWeeklyReport } from "../controllers/cron.controller";
+import { getPrefs, listNotifications, markRead, updatePrefs } from "../controllers/notification.controller";
 import { requireAdmin, requireAuth, requireModule } from "../middlewares/auth";
 import { googleCallback, googleConnect, googleDisconnect, googleStatus } from "../controllers/google.controller";
 
@@ -148,16 +166,28 @@ router.post("/auth/change-password", requireAuth, changePassword);
 // Formulários públicos (link enviado ao cliente), sem login.
 router.get("/public/forms/:publicId", publicOrg(Form as never, "publicId", "publicId"), getPublicForm);
 router.post("/public/forms/:publicId/responses", publicOrg(Form as never, "publicId", "publicId"), submitPublicForm);
+router.post("/public/forms/:publicId/progress", publicOrg(Form as never, "publicId", "publicId"), savePublicProgress);
+router.get("/public/forms/:publicId/progress/:sessionId", publicOrg(Form as never, "publicId", "publicId"), getPublicProgress);
 router.get("/public/form-invites/:code", publicOrg(FormInvite as never, "code", "code"), getInviteByCode);
 router.post("/public/form-invites/:code", publicOrg(FormInvite as never, "code", "code"), submitInviteByCode);
+router.post("/public/form-invites/:code/progress", publicOrg(FormInvite as never, "code", "code"), saveInviteProgress);
 router.get("/public/nps/:token", publicOrg(NPSInvite as never, "token", "token"), getPublicInvite);
 router.post("/public/nps/:token", publicOrg(NPSInvite as never, "token", "token"), respondPublicInvite);
 // Link público da proposta e rastreio de visualização.
 router.get("/public/proposals/:token", publicOrg(ProposalLink as never, "token", "token"), getPublicProposal);
 router.post("/public/proposals/:token/views", publicOrg(ProposalLink as never, "token", "token"), startProposalView);
 router.post("/public/proposals/:token/views/:viewId", publicOrg(ProposalLink as never, "token", "token"), beaconBody, heartbeatProposalView);
+router.post("/public/proposals/:token/accept", publicOrg(ProposalLink as never, "token", "token"), acceptPublicProposal);
 
 router.get("/google/callback", googleCallback);
+
+// Agendador (Vercel Cron diário + agendador externo a cada 10 min), protegido por CRON_SECRET.
+router.get("/cron/tick", cronTick);
+router.post("/cron/tick", cronTick);
+
+// Agendamento externo (o lead escolhe um horário livre).
+router.get("/public/schedule/:slug", publicOrg(SchedulingLink as never, "slug", "slug"), getPublicSchedule);
+router.post("/public/schedule/:slug/book", publicOrg(SchedulingLink as never, "slug", "slug"), bookPublicSlot);
 
 router.use(requireAuth);
 
@@ -248,6 +278,21 @@ router.get("/leads/:id/form-invites", crmAccess, listLeadInvites);
 router.post("/leads/:id/form-invites", crmAccess, createLeadInvite);
 router.patch("/leads/:id/comments/:commentId", requireAdmin, updateComment);
 router.delete("/leads/:id/comments/:commentId", requireAdmin, deleteComment);
+
+const agendaAccess = requireModule("agenda", "atividades", "crm");
+router.get("/scheduling/links", agendaAccess, listSchedulingLinks);
+router.post("/scheduling/links", agendaAccess, createSchedulingLink);
+router.patch("/scheduling/links/:id", agendaAccess, updateSchedulingLink);
+router.delete("/scheduling/links/:id", agendaAccess, deleteSchedulingLink);
+router.get("/scheduling/busy", myBusy);
+
+router.get("/notifications", listNotifications);
+router.post("/notifications/read", markRead);
+router.get("/notifications/prefs", getPrefs);
+router.patch("/notifications/prefs", updatePrefs);
+router.post("/settings/weekly-report/test", settingsAccess, testWeeklyReport);
+router.get("/scheduling/bookings", agendaAccess, listBookings);
+router.post("/scheduling/bookings/:id/cancel", agendaAccess, cancelBooking);
 
 router.get("/tasks", listTasks);
 router.post("/tasks", createTask);

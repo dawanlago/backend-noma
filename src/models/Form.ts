@@ -1,5 +1,6 @@
 import { Schema, models, model, type Document, type Model, type Types } from "mongoose";
 import { tenantPlugin } from "../lib/tenant";
+import type { FormAvailability } from "../lib/forms";
 import { FORM_FIELD_TARGETS, FORM_FIELD_TYPES, type FormFieldTarget, type FormFieldType } from "../types";
 
 export interface IFormField {
@@ -29,6 +30,10 @@ export interface IForm extends Document {
   createLead: boolean;
   funnelId?: Types.ObjectId;
   stageId?: Types.ObjectId;
+  /** Regra de disponibilidade para a pergunta "Data do evento". */
+  availability: FormAvailability;
+  /** Link de agendamento oferecido ao terminar o formulário (ex.: reunião depois do briefing). */
+  schedulingLinkId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,6 +47,15 @@ const FormFieldSchema = new Schema<IFormField>(
     options: { type: [String], default: [] },
     placeholder: { type: String, trim: true, default: "" },
     target: { type: String, enum: FORM_FIELD_TARGETS, default: "" },
+  },
+  { _id: false },
+);
+
+const FormAvailabilitySchema = new Schema<FormAvailability>(
+  {
+    minNoticeDays: { type: Number, min: 0, default: 0 },
+    blockedDates: { type: [{ _id: false, from: String, to: String }], default: [] },
+    message: { type: String, trim: true, default: "" },
   },
   { _id: false },
 );
@@ -60,6 +74,8 @@ const FormSchema = new Schema<IForm>(
     createLead: { type: Boolean, default: true },
     funnelId: { type: Schema.Types.ObjectId, ref: "Funnel" },
     stageId: { type: Schema.Types.ObjectId },
+    availability: { type: FormAvailabilitySchema, default: () => ({}) },
+    schedulingLinkId: { type: Schema.Types.ObjectId, ref: "SchedulingLink" },
   },
   { timestamps: true },
 );

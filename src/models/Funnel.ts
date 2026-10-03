@@ -24,6 +24,8 @@ export interface IFunnel extends Document {
   name: string;
   order: number;
   stages: Types.DocumentArray<IFunnelStage & Types.Subdocument>;
+  /** Etapa para onde vai a negociação aberta quando o contato responde um formulário de novo (vazio = etapa "Qualificado", se houver). */
+  qualifiedStageId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,6 +47,7 @@ const FunnelSchema = new Schema<IFunnel>(
     name: { type: String, required: true, trim: true },
     order: { type: Number, default: 0 },
     stages: { type: [FunnelStageSchema], default: [] },
+    qualifiedStageId: { type: Schema.Types.ObjectId },
   },
   { timestamps: true },
 );

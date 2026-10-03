@@ -26,6 +26,10 @@ export interface ITask extends Document {
   duration: number;
   /** Evento correspondente no Google Agenda do responsável. */
   googleEventId: string;
+  /** Empresa (preenchida pelo tenantPlugin). */
+  orgId?: Types.ObjectId;
+  /** Quando o lembrete já foi enviado (não repete). */
+  remindedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,6 +48,7 @@ const TaskSchema = new Schema<ITask>(
     notes: { type: String, default: "" },
     duration: { type: Number, default: 60, min: 5, max: 1440 },
     googleEventId: { type: String, default: "" },
+    remindedAt: { type: Date },
   },
   { timestamps: true },
 );

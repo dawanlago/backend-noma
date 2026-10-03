@@ -13,6 +13,7 @@ import StoredFile from "../models/StoredFile";
 import Task from "../models/Task";
 import { recordScope, withOwnerNames } from "../lib/ownership";
 import { phoneKey } from "../lib/phone";
+import { entryTotal } from "../lib/lateCharge";
 
 /* Base de dados: contatos (pessoas) e empresas, com perfil e históricos. */
 
@@ -440,7 +441,7 @@ async function history(req: Request, leadFilter: Record<string, unknown>, entryF
       wonValue: won.reduce((total, lead) => total + (lead.value || 0), 0),
       openCount: open.length,
       openValue: open.reduce((total, lead) => total + (lead.value || 0), 0),
-      received: received.reduce((total, entry) => total + entry.value, 0),
+      received: received.reduce((total, entry) => total + entryTotal(entry), 0),
     },
   };
 }

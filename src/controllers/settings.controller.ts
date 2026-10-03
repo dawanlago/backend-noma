@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import AppSettings from "../models/AppSettings";
 import { emailConfigured, sendMail, testMail } from "../lib/email";
 import { getSettings } from "../lib/seedDefaults";
+import { normalizeRules, type LateChargeRules } from "../lib/lateCharge";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -40,6 +41,23 @@ export async function updateSettings(req: Request, res: Response, next: NextFunc
         doc.brand.defaultColor = brand.defaultColor.toUpperCase();
       }
       doc.markModified("brand");
+    }
+    const finance = body.finance as Partial<LateChargeRules> | undefined;
+    if (finance && typeof finance === "object") {
+      doc.finance = normalizeRules({ ...normalizeRules(doc.finance), ...finance });
+      doc.markModified("finance");
+    }
+    // Relatório semanal: liga/desliga, dia, hora e destinatários (e-mails válidos).
+    const report = body.weeklyReport as Record<string, unknown> | undefined;
+    if (report && typeof report === "object") {
+      const current = doc.weeklyReport || { enabled: false, recipients: [], weekday: 1, hour: 8 };
+      if (typeof report.enabled === "boolean") current.enabled = report.enabled;
+      if (Array.isArray(report.recipients)) {
+        current.recipients = [...new Set(report.recipients.map((item) => String(item).trim().toLowerCase()).filter((item) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(item)))].slice(0, 20);
+      }
+      if (Number.isInteger(report.weekday) && Number(report.weekday) >= 0 && Number(report.weekday) <= 6) current.weekday = Number(report.weekday);
+      if (Number.isInteger(report.hour) && Number(report.hour) >= 0 && Number(report.hour) <= 23) current.hour = Number(report.hour);
+      doc.set("weeklyReport", current);
     }
     await doc.save();
     res.json({ data: publicSettings(doc) });

@@ -20,10 +20,24 @@ export interface IAppSettings extends Document {
     colors: IBrandColor[];
     defaultColor: string;
   };
+  /** Juros/multa por atraso de recebimentos (0 = não cobra). */
+  finance: {
+    lateFee: number;
+    monthlyInterest: number;
+    graceDays: number;
+  };
   /** Listas de opções que já receberam os valores padrão (não recria o que foi apagado). */
   seededLists: string[];
   /** Migrações de dados já aplicadas (rodam uma vez só). */
   migrations: string[];
+  /** Relatório semanal por e-mail: dia (0 = domingo) e hora (Brasília) de envio e destinatários. */
+  weeklyReport: {
+    enabled: boolean;
+    recipients: string[];
+    weekday: number;
+    hour: number;
+    lastSentAt?: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,8 +77,20 @@ const AppSettingsSchema = new Schema<IAppSettings>(
       colors: { type: [BrandColorSchema], default: () => DEFAULT_SETTINGS.brand.colors },
       defaultColor: { type: String, default: DEFAULT_SETTINGS.brand.defaultColor },
     },
+    finance: {
+      lateFee: { type: Number, min: 0, max: 100, default: 0 },
+      monthlyInterest: { type: Number, min: 0, max: 100, default: 0 },
+      graceDays: { type: Number, min: 0, max: 365, default: 0 },
+    },
     seededLists: { type: [String], default: [] },
     migrations: { type: [String], default: [] },
+    weeklyReport: {
+      enabled: { type: Boolean, default: false },
+      recipients: { type: [String], default: [] },
+      weekday: { type: Number, min: 0, max: 6, default: 1 },
+      hour: { type: Number, min: 0, max: 23, default: 8 },
+      lastSentAt: { type: Date },
+    },
   },
   { timestamps: true },
 );

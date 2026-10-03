@@ -7,6 +7,8 @@ import FinanceEntry, { type IFinanceEntry } from "../models/FinanceEntry";
 import MonthlyGoal from "../models/MonthlyGoal";
 import RecurringExpense from "../models/RecurringExpense";
 import { ownerScope, recordScope, stripOwner, withOwnerNames } from "../lib/ownership";
+import { computeLateCharge, entryTotal, normalizeRules, todayBR, type LateChargeRules } from "../lib/lateCharge";
+import { getSettings } from "../lib/seedDefaults";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -57,6 +59,43 @@ async function materializeRecurring(scope: Record<string, unknown>, month: strin
 }
 
 type EntryBody = Partial<IFinanceEntry> & { recurring?: boolean };
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+async function lateRules(): Promise<LateChargeRules> {
+  return normalizeRules((await getSettings()).finance);
+}
+
+/** O cliente não define juros/multa (o servidor calcula); `paidAt` inválido ou vazio = "hoje" ao receber. */
+function cleanSettlementBody(body: Record<string, unknown>) {
+  delete body.lateCharge;
+  if (body.paidAt !== undefined && !(typeof body.paidAt === "string" && ISO_DATE.test(body.paidAt))) delete body.paidAt;
+}
+
+/**
+ * Data do recebimento/pagamento e juros/multa por atraso.
+ * Só recalcula quando muda algo que pesa no cálculo (status, datas, valor ou perdão):
+ * mudar as taxas depois não altera o que já foi recebido.
+ */
+function applySettlement(entry: IFinanceEntry, rules: LateChargeRules) {
+  const settled = entry.status === "received" || entry.status === "paid";
+  if (!settled) {
+    entry.set("paidAt", undefined);
+    entry.set("lateCharge", undefined);
+    return;
+  }
+  if (!entry.paidAt) entry.paidAt = todayBR();
+  if (!entry.isNew && !entry.isModified(["status", "paidAt", "date", "value", "lateChargeWaived", "type"])) return;
+  const charge = entry.type === "income" && !entry.lateChargeWaived ? computeLateCharge(entry.value, entry.date, entry.paidAt, rules) : null;
+  entry.set("lateCharge", charge || undefined);
+}
+
+/** Entrada a receber vencida: quanto daria se fosse paga hoje. */
+function withProjection<T extends { type: string; status: string; value: number; date: string }>(entry: T, rules: LateChargeRules, today: string) {
+  if (entry.type !== "income" || entry.status !== "pending" || entry.date >= today) return entry;
+  const projected = computeLateCharge(entry.value, entry.date, today, rules);
+  return projected ? { ...entry, projectedLateCharge: projected } : entry;
+}
 
 /** Vínculos com negociação/contato/empresa: id válido ou vazio (remove o vínculo). */
 function linkUpdates(body: Record<string, unknown>) {
@@ -113,7 +152,9 @@ export async function listEntries(req: Request, res: Response, next: NextFunctio
     const distributed = new Set(
       (await BucketMovement.distinct("entryId", { entryId: { $in: entries.map((entry) => entry._id) } })).map(String),
     );
-    const data = entries.map((entry) => ({ ...entry, distributed: distributed.has(String(entry._id)) }));
+    const rules = await lateRules();
+    const today = todayBR();
+    const data = entries.map((entry) => withProjection({ ...entry, distributed: distributed.has(String(entry._id)) }, rules, today));
     res.json({ data: await withOwnerNames(data), meta: { month, goal: goal?.value || 0 } });
   } catch (error) {
     next(error);
@@ -123,9 +164,11 @@ export async function listEntries(req: Request, res: Response, next: NextFunctio
 export async function createEntry(req: Request, res: Response, next: NextFunction) {
   try {
     const { recurring, ...body } = stripOwner(req.body) as EntryBody;
+    cleanSettlementBody(body as Record<string, unknown>);
     const links = linkUpdates(body as Record<string, unknown>);
     const entry = new FinanceEntry({ ...body, ...links.set, ownerId: req.user!._id });
     await fillClientName(entry);
+    applySettlement(entry, await lateRules());
     await entry.validate();
     if (recurring && entry.type === "expense") {
       const series = await RecurringExpense.create({
@@ -157,10 +200,12 @@ export async function updateEntry(req: Request, res: Response, next: NextFunctio
     }
     const { recurring, ...body } = stripOwner(req.body) as EntryBody;
     delete body.recurringId;
+    cleanSettlementBody(body as Record<string, unknown>);
     const links = linkUpdates(body as Record<string, unknown>);
     entry.set({ ...body, ...links.set });
     links.unset.forEach((key) => entry.set(key, undefined));
     await fillClientName(entry);
+    applySettlement(entry, await lateRules());
 
     if (recurring === false && entry.recurringId) {
       await RecurringExpense.updateOne({ _id: entry.recurringId }, { active: false });
@@ -230,12 +275,16 @@ export async function getYearSummary(req: Request, res: Response, next: NextFunc
     }));
     for (const entry of entries) {
       const row = months[Number(entry.date.slice(5, 7)) - 1];
-      if (entry.type === "income" && entry.status === "received") row.received += entry.value;
+      // Recebido inclui juros/multa por atraso.
+      if (entry.type === "income" && entry.status === "received") row.received += entryTotal(entry);
       if (entry.type === "income" && entry.status === "pending") row.pending += entry.value;
-      if (entry.type === "expense" && entry.status === "paid") row.expenses += entry.value;
+      if (entry.type === "expense" && entry.status === "paid") row.expenses += entryTotal(entry);
     }
     months.forEach((row) => {
-      row.result = row.received - row.expenses;
+      row.received = MONEY(row.received);
+      row.expenses = MONEY(row.expenses);
+      row.pending = MONEY(row.pending);
+      row.result = MONEY(row.received - row.expenses);
     });
     res.json({ data: { year, months } });
   } catch (error) {
@@ -284,6 +333,7 @@ export async function createInstallments(req: Request, res: Response, next: Next
     const links = linkUpdates(body);
     const received = body.firstReceived === true;
     const docs = [];
+    const rules = await lateRules();
     for (const [index, parcel] of parcels.entries()) {
       const entry = new FinanceEntry({
         ownerId: req.user!._id,
@@ -302,6 +352,7 @@ export async function createInstallments(req: Request, res: Response, next: Next
         ...links.set,
       });
       await fillClientName(entry);
+      applySettlement(entry, rules);
       docs.push(entry);
     }
     await Promise.all(docs.map((doc) => doc.validate()));
