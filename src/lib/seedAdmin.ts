@@ -10,10 +10,8 @@ export async function seedAdminUser() {
 
   if (existing) {
     if (existing.role !== "admin" || !existing.isActive || !existing.isSuperAdmin) {
-      existing.role = "admin";
-      existing.isActive = true;
-      existing.isSuperAdmin = true;
-      await existing.save();
+      // updateOne (e não save): outro servidor pode estar mexendo no mesmo usuário ao subir.
+      await User.updateOne({ _id: existing._id }, { $set: { role: "admin", isActive: true, isSuperAdmin: true } });
     }
     return;
   }

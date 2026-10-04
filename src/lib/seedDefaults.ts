@@ -25,7 +25,13 @@ import { defaultItems, OPTION_LISTS } from "./optionLists";
 import { legacyLeadPatch } from "./leadMigration";
 
 export async function getSettings() {
-  return AppSettings.findOneAndUpdate({ key: "main" }, { $setOnInsert: { key: "main" } }, { returnDocument: "after", upsert: true });
+  try {
+    return await AppSettings.findOneAndUpdate({ key: "main" }, { $setOnInsert: { key: "main" } }, { returnDocument: "after", upsert: true });
+  } catch (error) {
+    // Dois servidores criando as configurações no mesmo instante: usa a que ficou.
+    if ((error as { code?: number })?.code !== 11000) throw error;
+    return (await AppSettings.findOne({ key: "main" }))!;
+  }
 }
 
 /** Cria as listas de opções que ainda não foram semeadas (o que o usuário apagou não volta). */
@@ -36,7 +42,10 @@ export async function seedOptionLists() {
   for (const list of pending) {
     await Promise.all(
       defaultItems(list).map((item) =>
-        OptionItem.updateOne({ list, value: item.value }, { $setOnInsert: item }, { upsert: true }),
+        OptionItem.updateOne({ list, value: item.value }, { $setOnInsert: item }, { upsert: true }).catch((error) => {
+          // Outro servidor semeou a mesma opção no mesmo instante.
+          if ((error as { code?: number })?.code !== 11000) throw error;
+        }),
       ),
     );
   }

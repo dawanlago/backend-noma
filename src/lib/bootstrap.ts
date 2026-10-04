@@ -1,7 +1,7 @@
 import { connectToDatabase } from "../config/db";
 import Company from "../models/Company";
 import Organization from "../models/Organization";
-import { ensurePrimaryOrganization, migrateToOrganizations } from "./organizations";
+import { deactivateEmptyDuplicates, ensurePrimaryOrganization, migrateToOrganizations } from "./organizations";
 import { migrateDealsAndProducts } from "./dealMigrations";
 import { migrateContacts } from "./contactMigrations";
 import { migrateNoteShares } from "./noteMigrations";
@@ -25,6 +25,7 @@ export function bootstrapApp() {
       await connectToDatabase();
       // Separação por empresa: os dados de antes ficam na primeira empresa.
       const primary = await ensurePrimaryOrganization();
+      await deactivateEmptyDuplicates(primary).catch((error) => console.error("[empresas:duplicada]", error));
       await seedAdminUser();
       // As migrações de dados antigos só valem para a primeira empresa.
       await runWithOrg(primary._id, async () => {

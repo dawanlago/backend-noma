@@ -38,22 +38,72 @@ async function stampOrg(orgId: Types.ObjectId) {
   }
 }
 
+const isDuplicateKey = (error: unknown) => (error as { code?: number })?.code === 11000;
+
 /**
  * Primeira empresa: na primeira vez, é criada com o nome das configurações atuais
- * e recebe todos os dados que já existiam.
+ * e recebe todos os dados que já existiam. À prova de dois servidores subindo juntos:
+ * o índice único de `isPrimary` deixa só um criar.
  */
 export async function ensurePrimaryOrganization(): Promise<IOrganization> {
-  const existing = await Organization.findOne().sort({ order: 1, createdAt: 1 });
-  if (existing) return existing;
+  await Organization.init();
+  const primary = await Organization.findOne({ isPrimary: true });
+  if (primary) return primary;
+  // Empresas criadas antes deste campo existir: a mais antiga vira a primeira.
+  const earliest = await Organization.findOne().sort({ order: 1, createdAt: 1 });
+  if (earliest) {
+    await Organization.updateOne({ _id: earliest._id }, { $set: { isPrimary: true } }).catch((error) => {
+      if (!isDuplicateKey(error)) throw error;
+    });
+    return (await Organization.findOne({ isPrimary: true }))!;
+  }
   const settings = await AppSettings.collection.findOne({ key: "main" });
-  const org = await Organization.create({
-    name: (settings?.companyName as string) || "Noma Produtora",
-    logo: (settings?.brand as { logo?: string } | undefined)?.logo || "",
-    order: 0,
+  let org: IOrganization | null = null;
+  try {
+    org = await Organization.findOneAndUpdate(
+      { isPrimary: true },
+      {
+        $setOnInsert: {
+          name: (settings?.companyName as string) || "Noma Produtora",
+          logo: (settings?.brand as { logo?: string } | undefined)?.logo || "",
+          order: 0,
+          isActive: true,
+        },
+      },
+      { upsert: true, returnDocument: "after" },
+    );
+  } catch (error) {
+    // Outro servidor criou no mesmo instante.
+    if (!isDuplicateKey(error)) throw error;
+    org = await Organization.findOne({ isPrimary: true });
+  }
+  // Carimbar é idempotente (só mexe no que ainda não tem empresa).
+  await stampOrg(org!._id);
+  console.log(`Empresa principal: ${org!.name}`);
+  return org!;
+}
+
+/**
+ * Conserto da primeira publicação: dois servidores subindo juntos podiam criar uma segunda
+ * "primeira empresa" vazia, com o mesmo nome. Ela é desativada (não apagada) se não tiver nada.
+ */
+export async function deactivateEmptyDuplicates(primary: IOrganization) {
+  const candidates = await Organization.find({
+    _id: { $ne: primary._id },
+    name: primary.name,
+    isActive: true,
+    createdAt: { $lte: new Date(primary.createdAt.getTime() + 10 * 60_000) },
   });
-  await stampOrg(org._id);
-  console.log(`Empresa criada a partir dos dados existentes: ${org.name}`);
-  return org;
+  const db = mongoose.connection.db!;
+  for (const org of candidates) {
+    const used = await Promise.all(
+      ["leads", "contacts", "companies", "financeentries", "tooldocuments", "forms", "tasks", "notes"].map((name) => db.collection(name).countDocuments({ orgId: org._id }, { limit: 1 })),
+    );
+    const members = await User.countDocuments({ "memberships.orgId": org._id });
+    if (used.some(Boolean) || members) continue;
+    await Organization.updateOne({ _id: org._id }, { $set: { isActive: false, name: `${org.name} (duplicada)` } });
+    console.log(`Empresa duplicada e vazia desativada: ${org._id}`);
+  }
 }
 
 async function once(key: string, action: () => Promise<void>) {
@@ -79,9 +129,11 @@ export async function migrateToOrganizations(primary: IOrganization) {
       const access = Object.fromEntries(
         MODULES.map((key) => [key, user.role === "admin" ? "all" : allowed.includes(key) ? "own" : "none"]),
       ) as AccessLevels;
-      user.memberships = [{ orgId: primary._id, role: user.role, access }];
-      if (user.role === "admin") user.isSuperAdmin = true;
-      await user.save();
+      // Só quem ainda não tem vínculo (outro servidor pode ter migrado no mesmo instante).
+      await User.updateOne(
+        { _id: user._id, "memberships.0": { $exists: false } },
+        { $set: { memberships: [{ orgId: primary._id, role: user.role, access }], ...(user.role === "admin" ? { isSuperAdmin: true } : {}) } },
+      );
     }
   });
 }
