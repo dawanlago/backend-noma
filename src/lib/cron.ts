@@ -1,8 +1,10 @@
+import Contact from "../models/Contact";
 import Lead from "../models/Lead";
 import Organization from "../models/Organization";
 import Task from "../models/Task";
 import User from "../models/User";
 import { localParts, toInstant } from "./availability";
+import { upcomingBirthdays } from "./birthdays";
 import { emailConfigured, sendMail } from "./email";
 import { notify, orgAdmins } from "./notifications";
 import { getSettings } from "./seedDefaults";
@@ -171,9 +173,49 @@ async function sendWeeklyReports(now: number) {
   return sent;
 }
 
-/** Uma rodada do agendador: lembretes, resumo diário e relatórios semanais. */
+/** Dias de antecedência do aviso "aniversário chegando" (além do aviso no próprio dia). */
+const BIRTHDAY_HEADS_UP = 3;
+
+/**
+ * Aniversários da base (a partir das 8h de Brasília, uma vez por dia por empresa):
+ * avisa a equipe no sino no dia (e por e-mail) e alguns dias antes.
+ */
+async function sendBirthdayNotices(now: number) {
+  const { date: today, time } = localParts(now);
+  if (time < "08:00") return 0;
+  const orgs = await Organization.find({ isActive: true }).select("_id").lean();
+  let sent = 0;
+  for (const org of orgs) {
+    await runWithOrg(org._id, async () => {
+      const settings = await getSettings();
+      if (settings.birthdayNoticeDate === today) return;
+      settings.birthdayNoticeDate = today;
+      await settings.save();
+      const people = await Contact.find({ birthDate: { $regex: /^\d{4}-\d{2}-\d{2}$/ } }).select("name birthDate").lean();
+      const upcoming = upcomingBirthdays(people, today, BIRTHDAY_HEADS_UP).filter((person) => person.daysUntil === 0 || person.daysUntil === BIRTHDAY_HEADS_UP);
+      if (!upcoming.length) return;
+      const team = await User.find({ isActive: true, memberships: { $elemMatch: { orgId: org._id } } }).select("_id").lean();
+      const ids = team.map((user) => user._id);
+      for (const person of upcoming) {
+        const age = person.age > 0 && person.age < 120 ? ` (${person.age} anos)` : "";
+        await notify(ids, {
+          type: "birthday",
+          title: person.daysUntil === 0 ? `Hoje é aniversário de ${person.name}${age}` : `${person.name} faz aniversário em ${BIRTHDAY_HEADS_UP} dias`,
+          body: person.daysUntil === 0 ? "Que tal mandar uma mensagem?" : `Dia ${br(person.date)}.`,
+          link: `/contatos/${person._id}`,
+          email: person.daysUntil === 0,
+        });
+        sent += 1;
+      }
+    });
+  }
+  return sent;
+}
+
+/** Uma rodada do agendador: lembretes, resumo diário, aniversários e relatórios semanais. */
 export async function runTick(now = Date.now()) {
-  const result = { reminders: 0, digests: 0, reports: 0 };
+  const result = { reminders: 0, digests: 0, reports: 0, birthdays: 0 };
+  result.birthdays = await sendBirthdayNotices(now).catch((error) => (console.error("[cron:aniversários]", error), 0));
   result.reminders = await sendReminders(now).catch((error) => (console.error("[cron:lembretes]", error), 0));
   result.digests = await sendDigests(now).catch((error) => (console.error("[cron:resumo]", error), 0));
   result.reports = await sendWeeklyReports(now).catch((error) => (console.error("[cron:relatório]", error), 0));

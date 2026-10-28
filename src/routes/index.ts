@@ -154,6 +154,11 @@ import { cronTick, testWeeklyReport } from "../controllers/cron.controller";
 import { getPrefs, listNotifications, markRead, updatePrefs } from "../controllers/notification.controller";
 import { requireAdmin, requireAuth, requireModule } from "../middlewares/auth";
 import { googleCallback, googleConnect, googleDisconnect, googleStatus } from "../controllers/google.controller";
+import { listIntegrations, updateIntegration } from "../controllers/integration.controller";
+import * as whatsappRoutes from "./whatsapp";
+import * as assinafyRoutes from "./assinafy";
+import * as automationRoutes from "./automation";
+import * as mediaRoutes from "./media";
 
 const router = Router();
 
@@ -190,7 +195,17 @@ router.post("/cron/tick", cronTick);
 router.get("/public/schedule/:slug", publicOrg(SchedulingLink as never, "slug", "slug"), getPublicSchedule);
 router.post("/public/schedule/:slug/book", publicOrg(SchedulingLink as never, "slug", "slug"), bookPublicSlot);
 
+// Integrações: webhooks (Z-API, Assinafy) e API de automação por token, sem login.
+router.use(whatsappRoutes.publicRouter);
+router.use(assinafyRoutes.publicRouter);
+router.use(automationRoutes.publicRouter);
+
 router.use(requireAuth);
+
+router.use(whatsappRoutes.privateRouter);
+router.use(assinafyRoutes.privateRouter);
+router.use(automationRoutes.privateRouter);
+router.use(mediaRoutes.privateRouter);
 
 router.get("/google/status", googleStatus);
 router.get("/google/connect", googleConnect);
@@ -204,6 +219,8 @@ router.get("/dashboard", getDashboard);
 router.get("/settings", readSettings);
 router.patch("/settings", settingsAccess, updateSettings);
 router.post("/settings/test-email", requireAdmin, sendTestEmail);
+router.get("/integrations", settingsAccess, listIntegrations);
+router.put("/integrations/:provider", settingsAccess, updateIntegration);
 
 router.get("/options", listOptions);
 // Qualquer usuário cadastra uma opção pelo atalho dos formulários; editar e excluir fica nas configurações.

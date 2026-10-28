@@ -2,7 +2,10 @@ import crypto from "crypto";
 import type { NextFunction, Request, Response } from "express";
 import { isValidObjectId } from "mongoose";
 import { computeSlots, DEFAULT_WINDOWS, localParts, overlaps, sanitizeWindows, toInstant, type Interval } from "../lib/availability";
+import { bookingConfirmationText } from "../lib/ai";
 import { emailConfigured, sendMail } from "../lib/email";
+import { findIntegration } from "../lib/integrations";
+import { sendWhatsAppText } from "../lib/zapi";
 import { googleBusy, syncTask } from "../lib/googleCalendar";
 import { notify } from "../lib/notifications";
 import { recordScope } from "../lib/ownership";
@@ -357,17 +360,45 @@ export async function bookPublicSlot(req: Request, res: Response, next: NextFunc
       hora: local.time,
       local: link.location ? `\nLocal: ${link.location}` : "",
     };
+    // Confirmação: texto do link, reescrito pela IA quando configurada (cai no texto padrão se falhar).
+    const fallbackText = fillTemplate(link.confirmationMessage || DEFAULT_CONFIRMATION, values);
+    const messageInput = {
+      fallbackText,
+      companyName: (await getSettings()).companyName || "produtora",
+      firstName: values.nome,
+      title: link.title,
+      date: values.data,
+      time: values.hora,
+      location: link.location,
+      notes,
+    };
+    const zapi = phone ? await findIntegration("zapi") : null;
+    if (zapi?.enabled && zapi.config?.confirmBookings) {
+      try {
+        const text = await bookingConfirmationText({ ...messageInput, channel: "whatsapp" });
+        await sendWhatsAppText(phone, text);
+        if (lead) {
+          lead.history.push({ at: new Date(), text: "Confirmação da reunião enviada pelo WhatsApp", userName: "Agendamento" });
+          await lead.save();
+        }
+      } catch (error) {
+        // Falha no WhatsApp não desfaz a reunião.
+        console.error("[agendamento:whatsapp]", error instanceof Error ? error.message : error);
+      }
+    }
     if (emailConfigured()) {
       const owner = await User.findById(link.ownerId).select("name email").lean();
       const jobs: Promise<unknown>[] = [];
       if (email) {
         jobs.push(
-          sendMail({
-            to: email,
-            subject: `Reunião confirmada: ${values.data} às ${values.hora}`,
-            text: fillTemplate(link.confirmationMessage || DEFAULT_CONFIRMATION, values),
-            replyTo: owner?.email,
-          }),
+          bookingConfirmationText({ ...messageInput, channel: "email" }).then((text) =>
+            sendMail({
+              to: email,
+              subject: `Reunião confirmada: ${values.data} às ${values.hora}`,
+              text,
+              replyTo: owner?.email,
+            }),
+          ),
         );
       }
       if (owner?.email) {

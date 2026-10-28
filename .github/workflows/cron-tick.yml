@@ -1,0 +1,29 @@
+# Agendador externo: chama /api/cron/tick a cada 10 minutos (lembretes de atividades,
+# resumo diário, aniversários e relatório semanal no horário certo). O Vercel Cron do
+# plano gratuito só roda 1x por dia.
+#
+# Configure em GitHub → Settings → Secrets and variables → Actions:
+#   CRON_URL    = https://<seu-backend>/api/cron/tick
+#   CRON_SECRET = o mesmo valor de CRON_SECRET do backend
+name: Agendador (cron tick)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Chamar /api/cron/tick
+        env:
+          CRON_URL: ${{ secrets.CRON_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Defina os secrets CRON_URL e CRON_SECRET para ativar o agendador."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 60 -X POST -H "Authorization: Bearer $CRON_SECRET" "$CRON_URL"

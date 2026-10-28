@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
+import { isValidObjectId } from "mongoose";
 import { orgFilter } from "../lib/tenant";
+import User from "../models/User";
 import Funnel from "../models/Funnel";
 import Form from "../models/Form";
 import Lead from "../models/Lead";
@@ -11,10 +13,18 @@ function qualifiedStageFor(raw: unknown, stages: { _id: unknown }[]) {
   return id && stages.some((stage) => String(stage._id) === id) ? id : undefined;
 }
 
+/** Anexa os nomes de quem criou (`createdByName`) e do responsável (`ownerName`). */
+async function withPeople<T extends { createdBy?: unknown; ownerId?: unknown }>(docs: T[]) {
+  const ids = [...new Set(docs.flatMap((doc) => [String(doc.createdBy), String(doc.ownerId)]).filter((id) => isValidObjectId(id)))];
+  const users = await User.find({ _id: { $in: ids } }).select("name").lean();
+  const names = new Map(users.map((user) => [String(user._id), user.name]));
+  return docs.map((doc) => ({ ...doc, createdByName: names.get(String(doc.createdBy)) || "", ownerName: names.get(String(doc.ownerId)) || "" }));
+}
+
 export async function listFunnels(_req: Request, res: Response, next: NextFunction) {
   try {
     const data = await Funnel.find().sort({ order: 1, createdAt: 1 }).lean();
-    res.json({ data });
+    res.json({ data: await withPeople(data) });
   } catch (error) {
     next(error);
   }
@@ -34,8 +44,11 @@ export async function createFunnel(req: Request, res: Response, next: NextFuncti
       stages,
       order: (last?.order ?? -1) + 1,
       qualifiedStageId: qualifiedStageFor(req.body.qualifiedStageId, stages),
+      createdBy: req.user!._id,
+      ownerId: isValidObjectId(req.body.ownerId) ? req.body.ownerId : req.user!._id,
     });
-    res.status(201).json({ data: doc.toJSON() });
+    const [data] = await withPeople([doc.toJSON()]);
+    res.status(201).json({ data });
   } catch (error) {
     next(error);
   }
@@ -66,6 +79,7 @@ export async function updateFunnel(req: Request, res: Response, next: NextFuncti
     }
     if (typeof req.body.name === "string" && req.body.name.trim()) doc.name = req.body.name.trim();
     if (typeof req.body.order === "number") doc.order = req.body.order;
+    if (req.body.ownerId !== undefined) doc.set("ownerId", isValidObjectId(req.body.ownerId) ? req.body.ownerId : undefined);
     if (req.body.qualifiedStageId !== undefined) {
       // Conferido de novo depois de gravar as etapas (abaixo), caso a etapa tenha sido removida.
       const known = [...doc.stages, ...(Array.isArray(req.body.stages) ? (req.body.stages as { _id: unknown }[]) : [])];
@@ -114,7 +128,8 @@ export async function updateFunnel(req: Request, res: Response, next: NextFuncti
     } else {
       await doc.save();
     }
-    res.json({ data: doc.toJSON() });
+    const [data] = await withPeople([doc.toJSON()]);
+    res.json({ data });
   } catch (error) {
     next(error);
   }

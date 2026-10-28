@@ -38,6 +38,8 @@ export interface IAppSettings extends Document {
     hour: number;
     lastSentAt?: Date;
   };
+  /** Último dia (YYYY-MM-DD) em que os avisos de aniversário saíram. */
+  birthdayNoticeDate?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,6 +93,7 @@ const AppSettingsSchema = new Schema<IAppSettings>(
       hour: { type: Number, min: 0, max: 23, default: 8 },
       lastSentAt: { type: Date },
     },
+    birthdayNoticeDate: { type: String },
   },
   { timestamps: true },
 );

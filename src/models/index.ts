@@ -32,6 +32,7 @@ export { default as SchedulingLink } from "./SchedulingLink";
 export { default as Booking } from "./Booking";
 export { default as Notification } from "./Notification";
 export { default as BucketMovement } from "./BucketMovement";
+export { default as Integration } from "./Integration";
 
 export type { IUser } from "./User";
 export type { ICompany } from "./Company";

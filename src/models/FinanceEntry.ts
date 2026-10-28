@@ -26,6 +26,9 @@ export interface IFinanceEntry extends Document {
   lateChargeWaived: boolean;
   /** Parcela de uma venda dividida (ex.: 2 de 3). */
   installment?: { number: number; total: number };
+  /** Boleto da parcela: linha digitável e arquivo (PDF). */
+  boletoCode: string;
+  boletoUrl: string;
   recurringId?: Types.ObjectId;
   /** Vínculos opcionais com a negociação e o cliente da base. */
   leadId?: Types.ObjectId;
@@ -62,6 +65,8 @@ const FinanceEntrySchema = new Schema<IFinanceEntry>(
       type: new Schema({ number: { type: Number, min: 1 }, total: { type: Number, min: 1 } }, { _id: false }),
       default: undefined,
     },
+    boletoCode: { type: String, trim: true, default: "" },
+    boletoUrl: { type: String, trim: true, default: "" },
     recurringId: { type: Schema.Types.ObjectId, ref: "RecurringExpense" },
     leadId: { type: Schema.Types.ObjectId, ref: "Lead" },
     contactId: { type: Schema.Types.ObjectId, ref: "Contact" },

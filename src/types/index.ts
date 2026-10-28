@@ -110,7 +110,7 @@ export const PAYMENT_METHODS = ["Pix", "Transferência", "Cartão", "Dinheiro", 
 export const ACCESS_LEVELS = ["none", "own", "all"] as const;
 export type AccessLevel = (typeof ACCESS_LEVELS)[number];
 
-export const CUSTOM_FIELD_ENTITIES = ["lead", "contact", "company", "prospecting"] as const;
+export const CUSTOM_FIELD_ENTITIES = ["lead", "contact", "company", "prospecting", "budget"] as const;
 export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
 export const CUSTOM_FIELD_TYPES = ["text", "textarea", "number", "date", "select", "multiselect"] as const;
 export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
