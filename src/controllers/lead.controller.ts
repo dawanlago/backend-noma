@@ -4,6 +4,7 @@ import { isValidObjectId, Types } from "mongoose";
 import Company from "../models/Company";
 import Contact from "../models/Contact";
 import Funnel, { type IFunnel } from "../models/Funnel";
+import Label from "../models/Label";
 import Lead, { type ILead } from "../models/Lead";
 import OptionItem from "../models/OptionItem";
 import Task from "../models/Task";
@@ -66,6 +67,9 @@ function applyBody(lead: ILead, body: Record<string, unknown>) {
   if (body.custom && typeof body.custom === "object") {
     lead.custom = body.custom as Record<string, unknown>;
     lead.markModified("custom");
+  }
+  if (Array.isArray(body.labelIds)) {
+    lead.labelIds = [...new Set(body.labelIds.map(String))].map(objectIdOrNull).filter((id): id is Types.ObjectId => Boolean(id));
   }
   if (body.contactId !== undefined) lead.contactId = objectIdOrNull(body.contactId) || undefined;
   if (body.companyId !== undefined) lead.companyId = objectIdOrNull(body.companyId) || undefined;
@@ -266,6 +270,21 @@ export async function deleteLead(req: Request, res: Response, next: NextFunction
     const lead = await Lead.findOneAndDelete({ _id: req.params.id, ...recordScope(req) });
     if (!lead) return notFound(res);
     await Task.updateMany({ leadId: lead._id }, { $unset: { leadId: 1 } });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** DELETE /labels/:id — apaga a etiqueta e a tira das negociações. */
+export async function deleteLabel(req: Request, res: Response, next: NextFunction) {
+  try {
+    const label = await Label.findByIdAndDelete(req.params.id);
+    if (!label) {
+      res.status(404).json({ error: "Etiqueta não encontrada." });
+      return;
+    }
+    await Lead.updateMany({ labelIds: label._id }, { $pull: { labelIds: label._id } }, { timestamps: false });
     res.status(204).send();
   } catch (error) {
     next(error);

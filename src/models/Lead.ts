@@ -47,7 +47,11 @@ export interface ILead extends Document {
   /** Valor avulso, somado aos produtos. */
   customValue: number;
   value: number;
+  /** Quando o valor da negociação foi lançado ou alterado pela última vez. */
+  valueSetAt?: Date;
   temperature: LeadTemperature;
+  /** Etiquetas (Configurações → Etiquetas). */
+  labelIds: Types.ObjectId[];
   nextActionDate?: Date;
   source: string;
   notes: string;
@@ -120,7 +124,9 @@ const LeadSchema = new Schema<ILead>(
     products: { type: [LeadProductSchema], default: [] },
     customValue: { type: Number, min: 0, default: 0 },
     value: { type: Number, min: 0, default: 0 },
+    valueSetAt: { type: Date },
     temperature: { type: String, enum: ["cold", "warm", "hot"], default: "warm" },
+    labelIds: { type: [{ type: Schema.Types.ObjectId, ref: "Label" }], default: [] },
     nextActionDate: { type: Date },
     source: { type: String, trim: true, default: "" },
     notes: { type: String, default: "" },
@@ -146,7 +152,9 @@ const LeadSchema = new Schema<ILead>(
 
 LeadSchema.pre("save", function syncDerived() {
   const productsTotal = (this.products || []).reduce((total, item) => total + (Number(item.price) || 0), 0);
-  this.value = Math.round((productsTotal + (Number(this.customValue) || 0)) * 100) / 100;
+  const value = Math.round((productsTotal + (Number(this.customValue) || 0)) * 100) / 100;
+  if (value !== this.value || (this.isNew && value > 0)) this.valueSetAt = value > 0 ? new Date() : undefined;
+  this.value = value;
   if (this.isNew && !this.createdBy) this.createdBy = this.ownerId;
   // Fora de "perdida" não há motivo de perda.
   if (this.status !== "lost") {

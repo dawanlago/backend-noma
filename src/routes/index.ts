@@ -44,6 +44,7 @@ import {
   addComment,
   createLead,
   deleteComment,
+  deleteLabel,
   deleteLead,
   getLead,
   listLeads,
@@ -258,7 +259,7 @@ router.get("/labels", listDocuments(Label));
 router.post("/labels", settingsAccess, createDocument(Label));
 router.get("/labels/:id", getDocument(Label));
 router.patch("/labels/:id", settingsAccess, updateDocument(Label));
-router.delete("/labels/:id", settingsAccess, deleteDocument(Label));
+router.delete("/labels/:id", settingsAccess, deleteLabel);
 
 router.get("/funnels", listFunnels);
 router.post("/funnels", settingsAccess, createFunnel);
