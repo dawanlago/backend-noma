@@ -8,9 +8,9 @@ import { findIntegration, secret } from "./integrations";
  */
 const DEFAULT_MODEL = "claude-opus-5-5";
 /** Modelos que aceitam o fallback do servidor ("default") quando a IA recusa um pedido. */
-const FALLBACK_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5"];
+export const FALLBACK_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5"];
 
-async function aiClient() {
+export async function aiClient() {
   const integration = await findIntegration("anthropic");
   if (integration && !integration.enabled) return null;
   const apiKey = secret(integration, "apiKey") || process.env.ANTHROPIC_API_KEY || "";

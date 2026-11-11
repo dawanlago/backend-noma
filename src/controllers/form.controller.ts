@@ -3,7 +3,7 @@ import { notify } from "../lib/notifications";
 import SchedulingLink from "../models/SchedulingLink";
 import Company from "../models/Company";
 import Contact from "../models/Contact";
-import Form, { type IForm } from "../models/Form";
+import Form, { FORM_FONTS, type IForm, type IFormDesign } from "../models/Form";
 import FormInvite from "../models/FormInvite";
 import FormResponse, { MAX_RESPONSE_EVENTS, type IFormResponse } from "../models/FormResponse";
 import Funnel from "../models/Funnel";
@@ -32,12 +32,29 @@ import { isValidObjectId, type Types } from "mongoose";
 import { getSettings } from "../lib/seedDefaults";
 
 /** Identidade mostrada no topo do formulário público: a do próprio formulário ou a da produtora. */
-async function publicBrand(form?: { logo?: string; accentColor?: string }) {
+async function publicBrand(form?: { logo?: string; accentColor?: string; design?: Partial<IFormDesign> }) {
   const settings = await getSettings();
   return {
     logo: form?.logo || settings.brand?.logo || "",
     companyName: settings.companyName || "Noma",
     color: form?.accentColor || settings.brand?.defaultColor || "",
+    design: normalizeDesign(form?.design),
+  };
+}
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+const IMAGE_URL = /^https:\/\/[^\s"'<>]+$/i;
+
+/** Visual do link saneado: valores desconhecidos voltam ao padrão. */
+export function normalizeDesign(value: unknown): IFormDesign {
+  const raw = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const text = (key: string) => (typeof raw[key] === "string" ? (raw[key] as string).trim() : "");
+  return {
+    theme: raw.theme === "dark" ? "dark" : "light",
+    background: HEX.test(text("background")) ? text("background") : "",
+    backgroundImage: IMAGE_URL.test(text("backgroundImage")) ? text("backgroundImage") : "",
+    coverImage: IMAGE_URL.test(text("coverImage")) ? text("coverImage") : "",
+    font: (FORM_FONTS as readonly string[]).includes(text("font")) ? text("font") : "",
   };
 }
 
@@ -51,6 +68,7 @@ function applyBody(form: InstanceType<typeof Form>, body: Record<string, unknown
   if (typeof body.successMessage === "string") form.successMessage = body.successMessage;
   if (typeof body.logo === "string") form.logo = body.logo.trim();
   if (typeof body.accentColor === "string") form.accentColor = /^#[0-9a-fA-F]{6}$/.test(body.accentColor.trim()) ? body.accentColor.trim() : "";
+  if (body.design !== undefined) form.set("design", normalizeDesign(body.design));
   if (typeof body.isActive === "boolean") form.isActive = body.isActive;
   if (typeof body.createLead === "boolean") form.createLead = body.createLead;
   if (body.fields !== undefined) form.set("fields", normalizeFormFields(body.fields));

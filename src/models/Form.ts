@@ -23,6 +23,21 @@ export interface IFormField {
   showIf?: IFormFieldShowIf;
 }
 
+export const FORM_FONTS = ["", "Inter", "Manrope", "DM Sans", "Space Grotesk", "Playfair Display", "DM Serif Display", "Lora"] as const;
+
+export interface IFormDesign {
+  /** Claro (fundo claro, texto escuro) ou escuro. */
+  theme: "light" | "dark";
+  /** Cor de fundo (#RRGGBB; vazio = padrão do tema). */
+  background: string;
+  /** Imagem de fundo (com um véu do tema por cima para manter a leitura). */
+  backgroundImage: string;
+  /** Imagem de capa na tela de boas-vindas. */
+  coverImage: string;
+  /** Fonte do Google Fonts (vazio = a do sistema). */
+  font: string;
+}
+
 /** Formulário com link público; as respostas podem virar contato + negociação. */
 export interface IForm extends Document {
   _id: Types.ObjectId;
@@ -36,6 +51,8 @@ export interface IForm extends Document {
   /** Aparência própria do link (vazio = identidade de Configurações → Geral). */
   logo: string;
   accentColor: string;
+  /** Visual do link: tema, fundo, capa e fonte. */
+  design: IFormDesign;
   createLead: boolean;
   funnelId?: Types.ObjectId;
   stageId?: Types.ObjectId;
@@ -79,6 +96,17 @@ const FormAvailabilitySchema = new Schema<FormAvailability>(
   { _id: false },
 );
 
+const FormDesignSchema = new Schema<IFormDesign>(
+  {
+    theme: { type: String, enum: ["light", "dark"], default: "light" },
+    background: { type: String, trim: true, default: "", match: /^(#[0-9a-fA-F]{6})?$/ },
+    backgroundImage: { type: String, trim: true, default: "" },
+    coverImage: { type: String, trim: true, default: "" },
+    font: { type: String, enum: FORM_FONTS, default: "" },
+  },
+  { _id: false },
+);
+
 const FormSchema = new Schema<IForm>(
   {
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -90,6 +118,7 @@ const FormSchema = new Schema<IForm>(
     successMessage: { type: String, trim: true, default: "Recebemos suas respostas. Obrigado!" },
     logo: { type: String, trim: true, default: "" },
     accentColor: { type: String, trim: true, default: "", match: /^(#[0-9a-fA-F]{6})?$/ },
+    design: { type: FormDesignSchema, default: () => ({}) },
     createLead: { type: Boolean, default: true },
     funnelId: { type: Schema.Types.ObjectId, ref: "Funnel" },
     stageId: { type: Schema.Types.ObjectId },

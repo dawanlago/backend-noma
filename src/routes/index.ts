@@ -155,6 +155,7 @@ import { getPrefs, listNotifications, markRead, updatePrefs } from "../controlle
 import { requireAdmin, requireAuth, requireModule } from "../middlewares/auth";
 import { googleCallback, googleConnect, googleDisconnect, googleStatus } from "../controllers/google.controller";
 import { listIntegrations, updateIntegration } from "../controllers/integration.controller";
+import { chatWithAssistant } from "../controllers/assistant.controller";
 import * as whatsappRoutes from "./whatsapp";
 import * as assinafyRoutes from "./assinafy";
 import * as automationRoutes from "./automation";
@@ -206,6 +207,9 @@ router.use(whatsappRoutes.privateRouter);
 router.use(assinafyRoutes.privateRouter);
 router.use(automationRoutes.privateRouter);
 router.use(mediaRoutes.privateRouter);
+
+// Assistente (Claude): consulta CRM, agenda, propostas, contatos e financeiro conforme o acesso de cada um.
+router.post("/assistant/chat", chatWithAssistant);
 
 router.get("/google/status", googleStatus);
 router.get("/google/connect", googleConnect);
