@@ -122,6 +122,23 @@ describe("formulários", () => {
     expect(validateAnswers(fields, { e_mail: "x" }, { partial: true }).error).toContain("e-mail");
   });
 
+  it("condicional: só exige pergunta visível", () => {
+    const conditional = normalizeFormFields([
+      { key: "tipo", label: "Tipo", type: "select", options: ["Casamento", "Institucional"], required: true },
+      {
+        key: "data",
+        label: "Data do casamento",
+        type: "eventDate",
+        required: true,
+        showIf: { fieldKey: "tipo", op: "eq", value: "Casamento" },
+      },
+    ]);
+    expect(conditional[1].showIf).toEqual({ fieldKey: "tipo", op: "eq", value: "Casamento" });
+    expect(validateAnswers(conditional, { tipo: "Institucional" }).error).toBe("");
+    expect(validateAnswers(conditional, { tipo: "Casamento" }).error).toContain("Data do casamento");
+    expect(validateAnswers(conditional, { tipo: "Casamento", data: "2026-12-20" }).error).toBe("");
+  });
+
   it("data do evento: antecedência mínima e datas bloqueadas", () => {
     const eventFields = normalizeFormFields([{ label: "Data do evento", type: "eventDate" }]);
     const rule = normalizeAvailability({ minNoticeDays: "15", blockedDates: [{ from: "2026-12-31", to: "2026-12-24" }, { from: "x" }], message: " Sem agenda " });

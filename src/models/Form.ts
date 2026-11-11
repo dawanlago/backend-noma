@@ -3,6 +3,14 @@ import { tenantPlugin } from "../lib/tenant";
 import type { FormAvailability } from "../lib/forms";
 import { FORM_FIELD_TARGETS, FORM_FIELD_TYPES, type FormFieldTarget, type FormFieldType } from "../types";
 
+/** Quando mostrar a pergunta: depende da resposta de outra (que vem antes). */
+export interface IFormFieldShowIf {
+  fieldKey: string;
+  /** eq = igual; neq = diferente; includes = contém / opção marcada; answered = qualquer resposta. */
+  op: "eq" | "neq" | "includes" | "answered";
+  value?: string;
+}
+
 export interface IFormField {
   key: string;
   label: string;
@@ -12,6 +20,7 @@ export interface IFormField {
   placeholder: string;
   /** Dado do contato que esta resposta preenche. */
   target: FormFieldTarget;
+  showIf?: IFormFieldShowIf;
 }
 
 /** Formulário com link público; as respostas podem virar contato + negociação. */
@@ -38,6 +47,15 @@ export interface IForm extends Document {
   updatedAt: Date;
 }
 
+const FormFieldShowIfSchema = new Schema<IFormFieldShowIf>(
+  {
+    fieldKey: { type: String, trim: true, default: "" },
+    op: { type: String, enum: ["eq", "neq", "includes", "answered"], default: "eq" },
+    value: { type: String, trim: true, default: "" },
+  },
+  { _id: false },
+);
+
 const FormFieldSchema = new Schema<IFormField>(
   {
     key: { type: String, required: true, trim: true },
@@ -47,6 +65,7 @@ const FormFieldSchema = new Schema<IFormField>(
     options: { type: [String], default: [] },
     placeholder: { type: String, trim: true, default: "" },
     target: { type: String, enum: FORM_FIELD_TARGETS, default: "" },
+    showIf: { type: FormFieldShowIfSchema },
   },
   { _id: false },
 );

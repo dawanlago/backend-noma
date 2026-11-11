@@ -153,7 +153,10 @@ const LeadSchema = new Schema<ILead>(
 LeadSchema.pre("save", function syncDerived() {
   const productsTotal = (this.products || []).reduce((total, item) => total + (Number(item.price) || 0), 0);
   const value = Math.round((productsTotal + (Number(this.customValue) || 0)) * 100) / 100;
-  if (value !== this.value || (this.isNew && value > 0)) this.valueSetAt = value > 0 ? new Date() : undefined;
+  // Valor zerado limpa a data; se veio `valueSetAt` no body, respeita; senão, marca "agora" ao mudar o valor.
+  const valueChanged = value !== this.value || (this.isNew && value > 0);
+  if (value <= 0) this.valueSetAt = undefined;
+  else if (valueChanged && !this.isModified("valueSetAt")) this.valueSetAt = new Date();
   this.value = value;
   if (this.isNew && !this.createdBy) this.createdBy = this.ownerId;
   // Fora de "perdida" não há motivo de perda.

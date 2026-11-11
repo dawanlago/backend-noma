@@ -1,7 +1,49 @@
 import { randomBytes, randomInt } from "crypto";
 import { FORM_FIELD_TARGETS, FORM_FIELD_TYPES, type FormFieldTarget, type FormFieldType } from "../types";
-import type { IFormField } from "../models/Form";
+import type { IFormField, IFormFieldShowIf } from "../models/Form";
 import { slugify, uniqueValue } from "./optionLists";
+
+const SHOW_IF_OPS: IFormFieldShowIf["op"][] = ["eq", "neq", "includes", "answered"];
+
+export type Answers = Record<string, string | string[] | boolean>;
+
+export function answerText(value: Answers[string] | undefined) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "Sim" : "Não";
+  return value || "";
+}
+
+/** Normaliza a regra "mostrar se" (só vale se apontar para outra pergunta). */
+export function normalizeShowIf(raw: unknown): IFormFieldShowIf | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const input = raw as Record<string, unknown>;
+  const fieldKey = typeof input.fieldKey === "string" ? input.fieldKey.trim() : "";
+  if (!fieldKey) return undefined;
+  const op = SHOW_IF_OPS.includes(input.op as IFormFieldShowIf["op"]) ? (input.op as IFormFieldShowIf["op"]) : "eq";
+  const value = typeof input.value === "string" ? input.value.trim() : "";
+  return { fieldKey, op, value };
+}
+
+/** A pergunta aparece com as respostas atuais? Sem regra = sempre. */
+export function fieldMatchesShowIf(field: Pick<IFormField, "showIf">, answers: Answers): boolean {
+  const rule = field.showIf;
+  if (!rule?.fieldKey) return true;
+  const raw = answers[rule.fieldKey];
+  const text = answerText(raw).trim();
+  const answered = Array.isArray(raw) ? raw.length > 0 : typeof raw === "boolean" ? true : Boolean(text);
+  if (rule.op === "answered") return answered;
+  if (rule.op === "eq") return Array.isArray(raw) ? raw.includes(rule.value || "") : text === (rule.value || "");
+  if (rule.op === "neq") return Array.isArray(raw) ? !raw.includes(rule.value || "") : text !== (rule.value || "");
+  if (rule.op === "includes") {
+    if (Array.isArray(raw)) return raw.includes(rule.value || "");
+    return text.toLowerCase().includes((rule.value || "").toLowerCase());
+  }
+  return true;
+}
+
+export function visibleFormFields(fields: IFormField[], answers: Answers) {
+  return fields.filter((field) => fieldMatchesShowIf(field, answers));
+}
 
 /** Código de 6 dígitos dos formulários enviados pela negociação. */
 export function newInviteCode() {
@@ -25,6 +67,7 @@ export function normalizeFormFields(raw: unknown): IFormField[] {
       const key = uniqueValue(requested, used);
       used.push(key);
       const type = FORM_FIELD_TYPES.includes(item.type as FormFieldType) ? (item.type as FormFieldType) : "text";
+      const showIf = normalizeShowIf(item.showIf);
       return {
         key,
         label,
@@ -33,11 +76,16 @@ export function normalizeFormFields(raw: unknown): IFormField[] {
         options: Array.isArray(item.options) ? item.options.map((option) => String(option).trim()).filter(Boolean) : [],
         placeholder: typeof item.placeholder === "string" ? item.placeholder.trim() : "",
         target: FORM_FIELD_TARGETS.includes(item.target as FormFieldTarget) ? (item.target as FormFieldTarget) : "",
+        ...(showIf ? { showIf } : {}),
       };
+    })
+    // Regra só pode apontar para pergunta anterior (evita ciclo / referência quebrada).
+    .map((field, index, list) => {
+      if (!field.showIf) return field;
+      const prior = list.slice(0, index).some((item) => item.key === field.showIf!.fieldKey);
+      return prior ? field : { ...field, showIf: undefined };
     });
 }
-
-export type Answers = Record<string, string | string[] | boolean>;
 
 /** E-mail com cara de e-mail (algo@dominio.ext). */
 export function isValidEmail(value: string) {
@@ -65,21 +113,35 @@ export function isValidDateKey(value: string) {
 export function validateAnswers(fields: IFormField[], raw: unknown, options: { partial?: boolean } = {}): { answers: Answers; error: string } {
   const input = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const answers: Answers = {};
-  const required = (field: IFormField) => field.required && !options.partial;
+  // 1ª passagem: coleta respostas (as regras condicionais usam o que já veio).
   for (const field of fields) {
     const value = input[field.key];
     if (field.type === "checkbox") {
       answers[field.key] = value === true || value === "true";
-      if (required(field) && !answers[field.key]) return { answers, error: `Marque "${field.label}".` };
       continue;
     }
     if (field.type === "multiselect") {
-      const list = (Array.isArray(value) ? value : []).map(String).filter((option) => field.options.includes(option));
-      answers[field.key] = list;
-      if (required(field) && !list.length) return { answers, error: `Escolha ao menos uma opção em "${field.label}".` };
+      answers[field.key] = (Array.isArray(value) ? value : []).map(String).filter((option) => field.options.includes(option));
       continue;
     }
     const text = typeof value === "string" || typeof value === "number" ? String(value).trim().slice(0, 5000) : "";
+    answers[field.key] = text;
+  }
+  // 2ª passagem: valida só as perguntas visíveis com as respostas atuais.
+  for (const field of fields) {
+    if (!fieldMatchesShowIf(field, answers)) continue;
+    const value = answers[field.key];
+    const required = field.required && !options.partial;
+    if (field.type === "checkbox") {
+      if (required && value !== true) return { answers, error: `Marque "${field.label}".` };
+      continue;
+    }
+    if (field.type === "multiselect") {
+      const list = Array.isArray(value) ? value : [];
+      if (required && !list.length) return { answers, error: `Escolha ao menos uma opção em "${field.label}".` };
+      continue;
+    }
+    const text = typeof value === "string" ? value : "";
     if (field.type === "select" && text && !field.options.includes(text)) {
       return { answers, error: `Opção inválida em "${field.label}".` };
     }
@@ -92,8 +154,7 @@ export function validateAnswers(fields: IFormField[], raw: unknown, options: { p
     if ((field.type === "eventDate" || field.type === "date") && text && !isValidDateKey(text)) {
       return { answers, error: `Informe uma data válida em "${field.label}".` };
     }
-    answers[field.key] = text;
-    if (required(field) && !text) return { answers, error: `Preencha "${field.label}".` };
+    if (required && !text) return { answers, error: `Preencha "${field.label}".` };
   }
   return { answers, error: "" };
 }
@@ -186,12 +247,6 @@ export function qualifiedStage<T extends { _id: unknown; name: string; kind: str
   });
 }
 
-export function answerText(value: Answers[string] | undefined) {
-  if (Array.isArray(value)) return value.join(", ");
-  if (typeof value === "boolean") return value ? "Sim" : "Não";
-  return value || "";
-}
-
 /** Dados do contato vindos dos campos marcados com destino (nome, e-mail...). */
 export function contactFromAnswers(fields: IFormField[], answers: Answers) {
   const pick = (target: FormFieldTarget) => {
@@ -209,7 +264,7 @@ export function contactFromAnswers(fields: IFormField[], answers: Answers) {
 
 /** Resumo das respostas para as observações da negociação criada. */
 export function answersSummary(fields: IFormField[], answers: Answers) {
-  return fields
+  return visibleFormFields(fields, answers)
     .map((field) => {
       const text = answerText(answers[field.key]);
       // Datas no formato brasileiro (DD/MM/AAAA).

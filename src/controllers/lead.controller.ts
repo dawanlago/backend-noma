@@ -64,6 +64,11 @@ function applyBody(lead: ILead, body: Record<string, unknown>) {
   if (body.nextActionDate !== undefined) {
     lead.nextActionDate = body.nextActionDate ? new Date(String(body.nextActionDate)) : undefined;
   }
+  if (body.valueSetAt !== undefined) {
+    const raw = body.valueSetAt ? String(body.valueSetAt).trim() : "";
+    // Meio-dia local evita o dia "voltar" por fuso ao gravar só a data.
+    lead.valueSetAt = raw ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00` : raw) : undefined;
+  }
   if (body.custom && typeof body.custom === "object") {
     lead.custom = body.custom as Record<string, unknown>;
     lead.markModified("custom");
