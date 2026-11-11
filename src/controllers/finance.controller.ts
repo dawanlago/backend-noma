@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { isValidObjectId } from "mongoose";
+import { isValidObjectId, Types } from "mongoose";
 import Company from "../models/Company";
 import BucketMovement from "../models/BucketMovement";
 import Contact from "../models/Contact";
@@ -9,6 +9,7 @@ import RecurringExpense from "../models/RecurringExpense";
 import { ownerScope, recordScope, stripOwner, withOwnerNames } from "../lib/ownership";
 import { computeLateCharge, entryTotal, normalizeRules, todayBR, type LateChargeRules } from "../lib/lateCharge";
 import { getSettings } from "../lib/seedDefaults";
+import { splitInstallments } from "../lib/installments";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -58,7 +59,13 @@ async function materializeRecurring(scope: Record<string, unknown>, month: strin
   }
 }
 
-type EntryBody = Partial<IFinanceEntry> & { recurring?: boolean };
+type EntryBody = Partial<IFinanceEntry> & { recurring?: boolean; installments?: number };
+
+/** Juros informados (R$, nunca negativos). */
+function cleanInterest(body: Record<string, unknown>) {
+  if (body.interest === undefined) return;
+  body.interest = MONEY(Math.max(0, Number(body.interest) || 0));
+}
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -163,9 +170,22 @@ export async function listEntries(req: Request, res: Response, next: NextFunctio
 
 export async function createEntry(req: Request, res: Response, next: NextFunction) {
   try {
-    const { recurring, ...body } = stripOwner(req.body) as EntryBody;
+    const { recurring, installments, ...body } = stripOwner(req.body) as EntryBody;
     cleanSettlementBody(body as Record<string, unknown>);
+    cleanInterest(body as Record<string, unknown>);
+    delete body.installment;
+    delete body.installmentGroupId;
     const links = linkUpdates(body as Record<string, unknown>);
+    const count = Math.floor(Number(installments) || 1);
+    if (count > 1) {
+      if (count > 60) {
+        res.status(400).json({ error: "Use no máximo 60 parcelas." });
+        return;
+      }
+      const data = await createInstalledEntries(req, body, links.set, count);
+      res.status(201).json({ data: data[0], meta: { installments: data } });
+      return;
+    }
     const entry = new FinanceEntry({ ...body, ...links.set, ownerId: req.user!._id });
     await fillClientName(entry);
     applySettlement(entry, await lateRules());
@@ -191,6 +211,42 @@ export async function createEntry(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/**
+ * Compra/venda parcelada lançada direto no financeiro (ex.: cartão em 3x): `value` é o valor
+ * total sem juros e `interest` o total de juros; cada parcela vai para o mês seguinte.
+ * A primeira parcela fica com a situação escolhida; as próximas ficam em aberto.
+ */
+async function createInstalledEntries(req: Request, body: Partial<IFinanceEntry>, links: Record<string, unknown>, count: number) {
+  const rules = await lateRules();
+  const groupId = new Types.ObjectId();
+  const firstDate = typeof body.date === "string" ? body.date : "";
+  const parts = ISO_DATE.test(firstDate) ? splitInstallments(Number(body.value) || 0, Number(body.interest) || 0, count, firstDate) : [];
+  const docs: IFinanceEntry[] = [];
+  for (const part of parts) {
+    const entry = new FinanceEntry({
+      ...body,
+      ...links,
+      ownerId: req.user!._id,
+      value: part.value,
+      interest: part.interest,
+      date: part.date,
+      installment: { number: part.number, total: count },
+      installmentGroupId: groupId,
+    });
+    if (part.number > 1) {
+      entry.status = entry.type === "income" ? "pending" : "planned";
+      entry.set("paidAt", undefined);
+    }
+    await fillClientName(entry);
+    applySettlement(entry, rules);
+    docs.push(entry);
+  }
+  if (!docs.length) await new FinanceEntry({ ...body, ownerId: req.user!._id }).validate();
+  await Promise.all(docs.map((doc) => doc.validate()));
+  const saved = await FinanceEntry.insertMany(docs);
+  return saved.map((doc) => doc.toJSON());
+}
+
 export async function updateEntry(req: Request, res: Response, next: NextFunction) {
   try {
     const entry = await FinanceEntry.findOne({ _id: req.params.id, ...recordScope(req) });
@@ -198,9 +254,12 @@ export async function updateEntry(req: Request, res: Response, next: NextFunctio
       res.status(404).json({ error: "Movimentação não encontrada." });
       return;
     }
-    const { recurring, ...body } = stripOwner(req.body) as EntryBody;
+    const { recurring, installments: _ignored, ...body } = stripOwner(req.body) as EntryBody;
     delete body.recurringId;
+    delete body.installment;
+    delete body.installmentGroupId;
     cleanSettlementBody(body as Record<string, unknown>);
+    cleanInterest(body as Record<string, unknown>);
     const links = linkUpdates(body as Record<string, unknown>);
     entry.set({ ...body, ...links.set });
     links.unset.forEach((key) => entry.set(key, undefined));
@@ -232,12 +291,24 @@ export async function updateEntry(req: Request, res: Response, next: NextFunctio
   }
 }
 
-/** `?scope=series` encerra a recorrência; sem isso, só pula este mês. */
+/**
+ * `?scope=series` encerra a recorrência; sem isso, só pula este mês.
+ * `?scope=installments` (parcela) apaga esta parcela e as seguintes da mesma compra/venda.
+ */
 export async function deleteEntry(req: Request, res: Response, next: NextFunction) {
   try {
     const entry = await FinanceEntry.findOne({ _id: req.params.id, ...recordScope(req) });
     if (!entry) {
       res.status(404).json({ error: "Movimentação não encontrada." });
+      return;
+    }
+    if (req.query.scope === "installments" && entry.installmentGroupId) {
+      await FinanceEntry.deleteMany({
+        ...recordScope(req),
+        installmentGroupId: entry.installmentGroupId,
+        date: { $gte: entry.date },
+      });
+      res.status(204).send();
       return;
     }
     if (entry.recurringId) {
@@ -277,7 +348,7 @@ export async function getYearSummary(req: Request, res: Response, next: NextFunc
       const row = months[Number(entry.date.slice(5, 7)) - 1];
       // Recebido inclui juros/multa por atraso.
       if (entry.type === "income" && entry.status === "received") row.received += entryTotal(entry);
-      if (entry.type === "income" && entry.status === "pending") row.pending += entry.value;
+      if (entry.type === "income" && entry.status === "pending") row.pending += entryTotal(entry);
       if (entry.type === "expense" && entry.status === "paid") row.expenses += entryTotal(entry);
     }
     months.forEach((row) => {
@@ -334,6 +405,7 @@ export async function createInstallments(req: Request, res: Response, next: Next
     const received = body.firstReceived === true;
     const docs = [];
     const rules = await lateRules();
+    const groupId = parcels.length > 1 ? new Types.ObjectId() : undefined;
     for (const [index, parcel] of parcels.entries()) {
       const entry = new FinanceEntry({
         ownerId: req.user!._id,
@@ -348,7 +420,7 @@ export async function createInstallments(req: Request, res: Response, next: Next
         cashbox: String(body.cashbox || ""),
         bank: String(body.bank || ""),
         notes: String(body.notes || ""),
-        ...(parcels.length > 1 ? { installment: { number: index + 1, total: parcels.length } } : {}),
+        ...(parcels.length > 1 ? { installment: { number: index + 1, total: parcels.length }, installmentGroupId: groupId } : {}),
         ...links.set,
       });
       await fillClientName(entry);

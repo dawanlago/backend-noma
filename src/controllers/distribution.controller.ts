@@ -33,7 +33,7 @@ function cashboxFilter(req: Request): Record<string, unknown> {
 
 /**
  * GET /finance/distribution?year=&cashbox=&ownerId=
- * Caixas com saldo (desde sempre) e os movimentos do ano.
+ * Caixas com saldo (desde sempre), os movimentos do ano e as entradas recebidas ainda não distribuídas.
  */
 export async function getDistribution(req: Request, res: Response, next: NextFunction) {
   try {
@@ -47,6 +47,15 @@ export async function getDistribution(req: Request, res: Response, next: NextFun
       ]),
       BucketMovement.find({ ...scope, date: { $regex: `^${year}-` } }).sort({ date: -1, createdAt: -1 }).lean(),
     ]);
+    // Entradas recebidas no ano que ainda não foram distribuídas: atalho "Distribuir" na tela.
+    const received = await FinanceEntry.find({ ...scope, type: "income", status: "received", date: { $regex: `^${year}-` } })
+      .sort({ date: -1 })
+      .limit(200)
+      .lean();
+    const done = new Set(
+      (await BucketMovement.distinct("entryId", { entryId: { $in: received.map((entry) => entry._id) } })).map(String),
+    );
+    const undistributed = received.filter((entry) => !done.has(String(entry._id))).slice(0, 30);
     const totalOf = (id: Types.ObjectId, kind: "in" | "out") =>
       sums.find((item) => String(item._id.bucketId) === String(id) && item._id.kind === kind)?.total || 0;
     res.json({
@@ -57,6 +66,7 @@ export async function getDistribution(req: Request, res: Response, next: NextFun
           return { ...bucket, received, withdrawn, balance: roundMoney(received - withdrawn) };
         }),
         movements: await withOwnerNames(movements),
+        undistributed,
       },
     });
   } catch (error) {

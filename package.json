@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "email:test": "tsx src/scripts/emailTest.ts"
+    "email:test": "tsx src/scripts/emailTest.ts",
+    "user:reset-password": "tsx src/scripts/resetPassword.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

@@ -26,6 +26,10 @@ export interface IFinanceEntry extends Document {
   lateChargeWaived: boolean;
   /** Parcela de uma venda dividida (ex.: 2 de 3). */
   installment?: { number: number; total: number };
+  /** Liga as parcelas de uma mesma compra/venda parcelada. */
+  installmentGroupId?: Types.ObjectId;
+  /** Juros do parcelamento/financiamento (R$) desta movimentação: somam no total. */
+  interest: number;
   /** Boleto da parcela: linha digitável e arquivo (PDF). */
   boletoCode: string;
   boletoUrl: string;
@@ -65,6 +69,8 @@ const FinanceEntrySchema = new Schema<IFinanceEntry>(
       type: new Schema({ number: { type: Number, min: 1 }, total: { type: Number, min: 1 } }, { _id: false }),
       default: undefined,
     },
+    installmentGroupId: { type: Schema.Types.ObjectId },
+    interest: { type: Number, min: 0, default: 0 },
     boletoCode: { type: String, trim: true, default: "" },
     boletoUrl: { type: String, trim: true, default: "" },
     recurringId: { type: Schema.Types.ObjectId, ref: "RecurringExpense" },
@@ -78,6 +84,7 @@ const FinanceEntrySchema = new Schema<IFinanceEntry>(
 FinanceEntrySchema.index({ ownerId: 1, date: 1 });
 FinanceEntrySchema.index({ recurringId: 1, date: 1 });
 FinanceEntrySchema.index({ leadId: 1, date: 1 });
+FinanceEntrySchema.index({ installmentGroupId: 1, date: 1 });
 
 FinanceEntrySchema.plugin(tenantPlugin);
 

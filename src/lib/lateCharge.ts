@@ -63,7 +63,7 @@ export function computeLateCharge(value: number, dueDate: string, paidAt: string
   return { days, fee, interest, total: cents(fee + interest) };
 }
 
-/** Valor que conta como recebido/pago: o valor da movimentação mais juros/multa, se houver. */
-export function entryTotal(entry: { value: number; lateCharge?: { total?: number } | null }) {
-  return cents((entry.value || 0) + (entry.lateCharge?.total || 0));
+/** Valor que conta nos totais: valor + juros do parcelamento + juros/multa por atraso, se houver. */
+export function entryTotal(entry: { value: number; interest?: number | null; lateCharge?: { total?: number } | null }) {
+  return cents((entry.value || 0) + (entry.interest || 0) + (entry.lateCharge?.total || 0));
 }

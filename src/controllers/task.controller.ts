@@ -4,6 +4,7 @@ import Lead from "../models/Lead";
 import Task, { type ITask } from "../models/Task";
 import { ownerScope, recordScope, withOwnerNames } from "../lib/ownership";
 import { removeEvent, syncTask } from "../lib/googleCalendar";
+import { acrossOrgs, currentOrgId } from "../lib/tenant";
 
 function applyBody(task: ITask, body: Record<string, unknown>) {
   if (typeof body.title === "string") task.title = body.title.trim();
@@ -56,10 +57,39 @@ export async function listTasks(req: Request, res: Response, next: NextFunction)
         Number(a.done) - Number(b.done) ||
         `${a.dueDate || "9999"} ${a.time || "99:99"}`.localeCompare(`${b.dueDate || "9999"} ${b.time || "99:99"}`),
     );
-    res.json({ data: await withOwnerNames(await withLeadNames(docs)) });
+    const data = await withOwnerNames(await withLeadNames(docs));
+    // Agenda: compromissos da própria pessoa nas outras empresas em que ela trabalha (só leitura).
+    if (req.query.otherOrgs === "1" && !filter.leadId) {
+      res.json({ data: [...data, ...(await otherOrgTasks(req, filter.dueDate))] });
+      return;
+    }
+    res.json({ data });
   } catch (error) {
     next(error);
   }
+}
+
+/**
+ * Compromissos com data de quem está logado nas outras empresas que essa pessoa acessa
+ * (ex.: uma reunião marcada pelo link de agendamento de outra empresa). Vêm marcados com `orgId` e `orgName`.
+ */
+async function otherOrgTasks(req: Request, dueDate: unknown) {
+  const current = currentOrgId();
+  const others = (req.access?.orgs || []).filter((org) => org._id !== current);
+  if (!others.length) return [];
+  const names = new Map(others.map((org) => [org._id, org.name]));
+  const docs = await acrossOrgs(() =>
+    Task.find({
+      ownerId: req.user!._id,
+      orgId: { $in: others.map((org) => org._id) },
+      dueDate: dueDate || { $ne: "" },
+    })
+      .sort({ dueDate: 1, time: 1 })
+      .limit(500)
+      .lean()
+      .exec(),
+  );
+  return docs.map((task) => ({ ...task, ownerName: req.user!.name, leadName: "", orgName: names.get(String(task.orgId)) || "" }));
 }
 
 export async function createTask(req: Request, res: Response, next: NextFunction) {

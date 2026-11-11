@@ -1,16 +1,30 @@
 import type { NextFunction, Request, Response } from "express";
 import Notification from "../models/Notification";
 import User from "../models/User";
+import { acrossOrgs } from "../lib/tenant";
 
-/** GET /notifications — os últimos avisos de quem está logado e quantos não foram lidos. */
+/** Empresas que a pessoa acessa: os avisos são dela, mas vêm de todas essas empresas. */
+function orgIdsOf(req: Request) {
+  return (req.access?.orgs || []).map((org) => org._id);
+}
+
+/**
+ * GET /notifications — os últimos avisos de quem está logado e quantos não foram lidos,
+ * de todas as empresas que a pessoa acessa (ex.: reunião marcada pelo link de outra empresa).
+ * Cada aviso traz `orgName` para o sino mostrar de qual empresa ele é.
+ */
 export async function listNotifications(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = req.user!._id;
-    const [items, unread] = await Promise.all([
-      Notification.find({ userId }).sort({ createdAt: -1 }).limit(50).lean(),
-      Notification.countDocuments({ userId, readAt: { $exists: false } }),
-    ]);
-    res.json({ data: { items, unread } });
+    const filter = { userId, orgId: { $in: orgIdsOf(req) } };
+    const [items, unread] = await acrossOrgs(() =>
+      Promise.all([
+        Notification.find(filter).sort({ createdAt: -1 }).limit(50).lean().exec(),
+        Notification.countDocuments({ ...filter, readAt: { $exists: false } }).exec(),
+      ]),
+    );
+    const names = new Map((req.access?.orgs || []).map((org) => [org._id, org.name]));
+    res.json({ data: { items: items.map((item) => ({ ...item, orgName: names.get(String((item as { orgId?: unknown }).orgId)) || "" })), unread } });
   } catch (error) {
     next(error);
   }
@@ -20,7 +34,12 @@ export async function listNotifications(req: Request, res: Response, next: NextF
 export async function markRead(req: Request, res: Response, next: NextFunction) {
   try {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : null;
-    await Notification.updateMany({ userId: req.user!._id, readAt: { $exists: false }, ...(ids ? { _id: { $in: ids } } : {}) }, { $set: { readAt: new Date() } });
+    await acrossOrgs(() =>
+      Notification.updateMany(
+        { userId: req.user!._id, orgId: { $in: orgIdsOf(req) }, readAt: { $exists: false }, ...(ids ? { _id: { $in: ids } } : {}) },
+        { $set: { readAt: new Date() } },
+      ).exec(),
+    );
     res.status(204).send();
   } catch (error) {
     next(error);

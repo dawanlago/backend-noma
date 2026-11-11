@@ -53,5 +53,6 @@ describe("financeiro: juros e multa por atraso", () => {
   it("total da movimentação soma juros/multa", () => {
     expect(entryTotal({ value: 1000, lateCharge: { total: 25 } })).toBe(1025);
     expect(entryTotal({ value: 1000 })).toBe(1000);
+    expect(entryTotal({ value: 1000, interest: 50, lateCharge: { total: 25 } })).toBe(1075);
   });
 });
